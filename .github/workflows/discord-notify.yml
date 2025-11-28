@@ -1,0 +1,14 @@
+name: Discord Notification
+
+on: [push, pull_request]
+
+jobs:
+  discord:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Discord Notification
+        env:
+          DISCORD_WEBHOOK: "https://discord.com/api/webhooks/1443936258131886113/fuzeJ0BS3EK9d-aHRlnmzT4g1ub_GxOnUHQAxi1AUH9woGb1sQvEulZJUVCnYT1LDopv"
+        uses: Ilshidur/action-discord@master
+        with:
+          args: 'Project Update: {{ EVENT_PAYLOAD.repository.full_name }} has been updated by {{ EVENT_PAYLOAD.sender.login }}!'

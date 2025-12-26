@@ -332,7 +332,7 @@ def points_command(status=None, format_type='json'):
             return get_mock_points(status)
             
     except requests.exceptions.ConnectionError:
-        # ΔΕΝ βρέθηκε το API
+        
         print("API NOT READY ")
         print("   Χρήση mock δεδομένων...")
         return get_mock_points(status)

@@ -12,7 +12,7 @@ from datetime import datetime
 
 
 def get_mock_data():
-    """Επιστρέφει mock δεδομένα σύμφωνα με τις προδιαγραφές"""
+    
     return {
         "status": "OK",
         "dbconnection": "mysql://mock:mock@localhost:3306/mockdb",
@@ -22,8 +22,7 @@ def get_mock_data():
     }
 
 def get_mock_points(status=None):
-    """Επιστρέφει mock δεδομένα για φορτιστές σύμφωνα με προδιαγραφές Part 2 σελ. 3"""
-    # Βασικά mock data από προδιαγραφές
+    
     all_points = [
         {
             "providerName": "bestPowerGR",
@@ -67,14 +66,13 @@ def get_mock_points(status=None):
         }
     ]
     
-    # Φίλτρο ανά status αν δοθεί
+    
     if status:
         return [point for point in all_points if point["status"] == status]
     return all_points
 
 def get_mock_point(point_id):
-    """Επιστρέφει mock δεδομένα για ένα συγκεκριμένο φορτιστή"""
-    # Mock database με διαφορετικούς φορτιστές
+    
     mock_points_db = {
         "1": {
             "pointid": "1",
@@ -114,14 +112,13 @@ def get_mock_point(point_id):
         }
     }
     
-    # Επιστροφή του φορτιστή ή μήνυμα λάθους
+    
     return mock_points_db.get(str(point_id), {
         "error": f"Φορτιστής με ID {point_id} δεν βρέθηκε"
     })
 
 def get_mock_point_for_update(point_id):
-    """Επιστρέφει mock δεδομένα για ενημέρωση φορτιστή"""
-    # Βασικά δεδομένα για διάφορους φορτιστές
+    
     mock_points = {
         "1": {"status": "available", "kwhprice": 0.55},
         "2": {"status": "charging", "kwhprice": 0.60},
@@ -129,12 +126,12 @@ def get_mock_point_for_update(point_id):
         "123": {"status": "available", "kwhprice": 0.65}
     }
     
-    # Επιστροφή δεδομένων για τον συγκεκριμένο φορτιστή ή default
+    
     return mock_points.get(str(point_id), {"status": "available", "kwhprice": 0.50})
 
 
 def get_mock_pointstatus(point_id, date_from, date_to, format_type='json'):
-    """Επιστρέφει mock δεδομένα για ιστορικό κατάστασης"""
+    
     mock_data = [
         {
             "timeref": "2025-11-02 08:55",
@@ -168,11 +165,11 @@ def get_mock_pointstatus(point_id, date_from, date_to, format_type='json'):
     
 
 def get_mock_reservation_success(point_id, minutes=None):
-    """Επιστρέφει επιτυχημένη mock δέσμευση"""
+    
     from datetime import datetime, timedelta
     
-    # Υπολογισμός λήξης δέσμευσης
-    reservation_minutes = min(minutes if minutes else 30, 60)  # Μέγιστο 60 λεπτά
+    
+    reservation_minutes = min(minutes if minutes else 30, 60) 
     end_time = datetime.now() + timedelta(minutes=reservation_minutes)
     
     return {
@@ -184,10 +181,10 @@ def get_mock_reservation_success(point_id, minutes=None):
 
 
 def get_mock_reservation_failed(point_id, minutes=None):
-    """Επιστρέφει αποτυχημένη mock δέσμευση"""
+    
     return {
         "pointid": str(point_id),
-        "status": "available",  # Παραμένει available
+        "status": "available",  
         "reservationendtime": "1970-01-01 00:00",  # Unix epoch για αποτυχία
         "error": "Charger not available for reservation",
         "mock_note": "Mock failed reservation"
@@ -195,7 +192,7 @@ def get_mock_reservation_failed(point_id, minutes=None):
 
 
 def get_mock_sessions(point_id, date_from, date_to, format_type='json'):
-    """Επιστρέφει mock δεδομένα για ιστορικό φορτίσεων"""
+    
     mock_data = [
         {
             "starttime": "2025-11-07 09:10",
@@ -241,7 +238,7 @@ def get_mock_sessions(point_id, date_from, date_to, format_type='json'):
 
 
 def get_mock_newsession_success(session_data):
-    """Επιστρέφει επιτυχημένη mock καταγραφή φόρτισης"""
+    
     return {
         "status": "success",
         "message": "Mock: Charging session recorded",
@@ -252,7 +249,7 @@ def get_mock_newsession_success(session_data):
 
 
 def get_mock_newsession_error(session_data):
-    """Επιστρέφει αποτυχημένη mock καταγραφή"""
+   
     return {
         "status": "error",
         "message": "Failed to record charging session",
@@ -262,53 +259,52 @@ def get_mock_newsession_error(session_data):
 
 def healthcheck_command():
     """Εκτελεί την εντολή healthcheck"""
-    print("🔍 Εκτέλεση healthcheck...")
+    print(" Εκτέλεση healthcheck...")
     
-    # Προσπάθεια σύνδεσης με το πραγματικό API
+    
     try:
-        print("🌐 Προσπάθεια σύνδεσης με το API...")
+        print(" Προσπάθεια σύνδεσης με το API...")
         response = requests.get("https://localhost:9876/api/admin/healthcheck", timeout=3)
         
         if response.status_code == 200:
-            # Βρήκε το API - χρησιμοποιούμε πραγματικά δεδομένα
             data = response.json()
-            print("✅ Το API βρέθηκε και απάντησε!")
+            print("✅ to API βρέθηκε και απάντησε!")
         else:
             # Το API υπάρχει αλλά έδωσε error
-            print(f"⚠️ Το API απάντησε με σφάλμα: HTTP {response.status_code}")
-            print("🔄 Πτώση σε mock δεδομένα...")
+            print(f"API απάντησε με σφάλμα: HTTP {response.status_code}")
+            print(" Πτώση σε mock δεδομένα...")
             data = get_mock_data()
             
     except requests.exceptions.ConnectionError:
         # ΔΕΝ βρέθηκε το API
-        print("❌ API NOT READY - Δεν μπορώ να συνδεθώ στο API")
-        print("   Το API δεν τρέχει στο localhost:9876")
+        print(" API NOT READY ")
+        print("   To API δεν τρέχει στο localhost:9876")
         print("   Χρήση mock δεδομένων...")
         data = get_mock_data()
         
     except requests.exceptions.Timeout:
-        print("⏰ Timeout - Το API δεν απάντησε εγκαίρως")
-        print("🔄 Χρήση mock δεδομένα...")
+        print("Timeout - To API δεν απάντησε εγκαίρως")
+        print("Χρήση mock δεδομένα...")
         data = get_mock_data()
     
     except Exception as e:
-        print(f"⚠️ Άγνωστο σφάλμα: {e}")
-        print("🔄 Χρήση mock δεδομένα...")
+        print(f" Άγνωστο σφάλμα: {e}")
+        print(" Χρήση mock δεδομένα...")
         data = get_mock_data()
     
     # Εμφάνιση αποτελεσμάτων (είτε από API είτε από mock)
-    print("\n📊 ΑΠΟΤΕΛΕΣΜΑΤΑ:")
+    print("\n ΑΠΟΤΕΛΕΣΜΑΤΑ:")
     print(json.dumps(data, indent=2, ensure_ascii=False))
     
     return data
 
 def points_command(status=None, format_type='json'):
-    """Εκτελεί την εντολή points για λίστα φορτιστών"""
+    
     print(f"📋 Λίστα φορτιστών" + (f" (status: {status})" if status else ""))
     
-    # Προσπάθεια σύνδεσης με το πραγματικό API
+    
     try:
-        print("🌐 Προσπάθεια σύνδεσης με το API...")
+        print(" Προσπάθεια σύνδεσης με το API...")
         
         # Κατασκευή URL με παραμέτρους
         url = "https://localhost:9876/api/points"
@@ -322,7 +318,7 @@ def points_command(status=None, format_type='json'):
         
         if response.status_code == 200:
             # Βρήκε το API
-            print("✅ Το API βρέθηκε και απάντησε!")
+            print(" API βρέθηκε και απάντησε!")
             
             if format_type == 'csv':
                 return response.text  # CSV text
@@ -331,86 +327,86 @@ def points_command(status=None, format_type='json'):
                 
         else:
             # Το API υπάρχει αλλά έδωσε error
-            print(f"⚠️ Το API απάντησε με σφάλμα: HTTP {response.status_code}")
-            print("🔄 Πτώση σε mock δεδομένα...")
+            print(f"API απάντησε με σφάλμα: HTTP {response.status_code}")
+            print(" Πτώση σε mock δεδομένα...")
             return get_mock_points(status)
             
     except requests.exceptions.ConnectionError:
         # ΔΕΝ βρέθηκε το API
-        print("❌ API NOT READY - Δεν μπορώ να συνδεθώ στο API")
+        print("API NOT READY ")
         print("   Χρήση mock δεδομένων...")
         return get_mock_points(status)
         
     except requests.exceptions.Timeout:
-        print("⏰ Timeout - Το API δεν απάντησε εγκαίρως")
-        print("🔄 Χρήση mock δεδομένων...")
+        print(" Timeout - API δεν απάντησε εγκαίρως")
+        print(" Χρήση mock δεδομένων...")
         return get_mock_points(status)
     
     except Exception as e:
-        print(f"⚠️ Άγνωστο σφάλμα: {e}")
-        print("🔄 Χρήση mock δεδομένων...")
+        print(f" Άγνωστο σφάλμα: {e}")
+        print(" Χρήση mock δεδομένων...")
         return get_mock_points(status)
     
 
 def point_command(point_id):
-    """Εκτελεί την εντολή point για ένα συγκεκριμένο φορτιστή"""
-    print(f"🔎 Πληροφορίες για φορτιστή ID: {point_id}")
     
-    # Προσπάθεια σύνδεσης με το πραγματικό API
+    print(f" Πληροφορίες για φορτιστή ID: {point_id}")
+    
+   
     try:
-        print("🌐 Προσπάθεια σύνδεσης με το API...")
+        print("Προσπάθεια σύνδεσης με το API...")
         
-        # Κατασκευή URL σύμφωνα με προδιαγραφές: /point/:id
+        
         url = f"https://localhost:9876/api/point/{point_id}"
         
         response = requests.get(url, timeout=3)
         
         if response.status_code == 200:
             # Βρήκε το API
-            print("✅ Το API βρέθηκε και απάντησε!")
+            print("aPI βρέθηκε και απάντησε!")
             return response.json()
                 
         elif response.status_code == 404:
             # Ο φορτιστής δεν βρέθηκε στο API
-            print(f"❌ Ο φορτιστής {point_id} δεν βρέθηκε στο API")
+            print(f" φορτιστής {point_id} δεν βρέθηκε στο API")
             return get_mock_point(point_id)
             
         else:
             # Άλλο σφάλμα από το API
-            print(f"⚠️ Το API απάντησε με σφάλμα: HTTP {response.status_code}")
-            print("🔄 Πτώση σε mock δεδομένα...")
+            print(f"API απάντησε με σφάλμα: HTTP {response.status_code}")
+            print(" Πτώση σε mock δεδομένα...")
             return get_mock_point(point_id)
             
     except requests.exceptions.ConnectionError:
         # ΔΕΝ βρέθηκε το API
-        print("❌ API NOT READY - Δεν μπορώ να συνδεθώ στο API")
+        print(" API NOT READY ")
         print("   Χρήση mock δεδομένων...")
         return get_mock_point(point_id)
         
     except requests.exceptions.Timeout:
-        print("⏰ Timeout - Το API δεν απάντησε εγκαίρως")
-        print("🔄 Χρήση mock δεδομένων...")
+        print("Timeout ")
+        print(" Χρήση mock δεδομένων...")
         return get_mock_point(point_id)
     
     except Exception as e:
-        print(f"⚠️ Άγνωστο σφάλμα: {e}")
-        print("🔄 Χρήση mock δεδομένων...")
+        print(f" Άγνωστο σφάλμα: {e}")
+        print(" Χρήση mock δεδομένων...")
         return get_mock_point(point_id)
 
 
 def addpoints_command(csv_file_path):
-    """Εκτελεί την εντολή addpoints για προσθήκη νέων φορτιστών από CSV"""
-    print(f"📁 Προσθήκη φορτιστών από αρχείο: {csv_file_path}")
+    
+    print(f"Προσθήκη φορτιστών από αρχείο: {csv_file_path}")
     
     # Έλεγχος αν το αρχείο υπάρχει
     import os
     if not os.path.exists(csv_file_path):
-        print(f"❌ Το αρχείο '{csv_file_path}' δεν βρέθηκε")
+        print(f"αρχείο '{csv_file_path}' δεν βρέθηκε")
         return {"error": f"File not found: {csv_file_path}"}
     
-    # Προσπάθεια σύνδεσης με το πραγματικό API
+    
     try:
-        print("🌐 Προσπάθεια σύνδεσης με το API...")
+        print("Προσπάθεια σύνδεσης με το API...")
         
         # Κατασκευή URL
         url = "https://localhost:9876/api/admin/addpoints"
@@ -421,11 +417,11 @@ def addpoints_command(csv_file_path):
             response = requests.post(url, files=files, timeout=10)
         
         if response.status_code == 200:
-            print("✅ Το API δέχτηκε το αρχείο CSV!")
+            print("API δέχτηκε το αρχείο CSV!")
             return {"status": "success", "message": "File uploaded successfully"}
         else:
             # Σφάλμα από το API
-            print(f"⚠️ Το API απάντησε με σφάλμα: HTTP {response.status_code}")
+            print(f" API απάντησε με σφάλμα: HTTP {response.status_code}")
             try:
                 error_data = response.json()
                 return {"status": "error", "message": error_data}
@@ -434,10 +430,10 @@ def addpoints_command(csv_file_path):
             
     except requests.exceptions.ConnectionError:
         # ΔΕΝ βρέθηκε το API - δημιουργούμε mock success
-        print("❌ API NOT READY - Δεν μπορώ να συνδεθώ στο API")
-        print("   Mock: Το αρχείο CSV θα ανεβαινόταν εάν ήταν διαθέσιμο το API")
+        print("API NOT READY ")
+        print("   Mock:  αρχείο CSV θα anevaine εάν ήταν διαθέσιμο το API")
         
-        # Δημιουργία mock success response
+        # mok
         return {
             "status": "success",
             "message": "Mock upload - API not available",
@@ -449,17 +445,17 @@ def addpoints_command(csv_file_path):
         }
         
     except requests.exceptions.Timeout:
-        print("⏰ Timeout - Το API δεν απάντησε εγκαίρως")
+        print(" Timeout ")
         return {"status": "error", "message": "API timeout"}
     
     except Exception as e:
-        print(f"⚠️ Άγνωστο σφάλμα: {e}")
+        print(f" Άγνωστο σφάλμα: {e}")
         return {"status": "error", "message": str(e)}
     
 
 def updpoint_command(point_id, status=None, price=None):
-    """Εκτελεί την εντολή updpoint για ενημέρωση φορτιστή"""
-    print(f"✏️ Ενημέρωση φορτιστή ID: {point_id}")
+   
+    print(f"Ενημέρωση φορτιστή ID: {point_id}")
     
     # Έλεγχος ότι δόθηκε τουλάχιστον μία παράμετρος
     if status is None and price is None:
@@ -471,7 +467,7 @@ def updpoint_command(point_id, status=None, price=None):
             "error": "At least one of --status or --price must be provided",
             "debuginfo": "No update parameters provided"
         }
-        print("❌ Πρέπει να δοθεί τουλάχιστον ένα από: --status ή --price")
+        print("Πρέπει na δοθεί τουλάχιστον ένα από: --status ή --price")
         return error_response
     
     # Προετοιμασία δεδομένων για το API
@@ -483,9 +479,9 @@ def updpoint_command(point_id, status=None, price=None):
         update_data["kwhprice"] = float(price)
         print(f"   Νέα τιμή/kWh: €{price}")
     
-    # Προσπάθεια σύνδεσης με το πραγματικό API
+    
     try:
-        print("🌐 Προσπάθεια σύνδεσης με το API...")
+        print(" Προσπάθεια σύνδεσης με το API...")
         
         # Κατασκευή URL
         url = f"https://localhost:9876/api/updpoint/{point_id}"
@@ -494,11 +490,11 @@ def updpoint_command(point_id, status=None, price=None):
         response = requests.post(url, json=update_data, timeout=5)
         
         if response.status_code == 200:
-            print("✅ Το API επεξεργάστηκε την ενημέρωση!")
+            print(" API επεξεργάστηκε την ενημέρωση!")
             return response.json()
         else:
             # Σφάλμα από το API
-            print(f"❌ Σφάλμα API: HTTP {response.status_code}")
+            print(f" Σφάλμα API: HTTP {response.status_code}")
             try:
                 return response.json()
             except:
@@ -513,7 +509,7 @@ def updpoint_command(point_id, status=None, price=None):
             
     except requests.exceptions.ConnectionError:
         # ΔΕΝ βρέθηκε το API - MOCK RESPONSE
-        print("❌ API NOT READY - Χρήση mock δεδομένων...")
+        print("API NOT READY - Χρήση mock δεδομένων...")
         
         # Δημιουργία mock response
         return {
@@ -524,7 +520,7 @@ def updpoint_command(point_id, status=None, price=None):
         }
         
     except Exception as e:
-        print(f"⚠️ Σφάλμα: {e}")
+        print(f" Σφάλμα: {e}")
         return {
             "call": "POST /api/updpoint/:id",
             "timeref": "2025-11-10 12:00:00",
@@ -536,42 +532,42 @@ def updpoint_command(point_id, status=None, price=None):
 
 
 def resetpoints_command():
-    """Εκτελεί την εντολή resetpoints"""
-    print("🔄 Επαναφορά δεδομένων φορτιστών...")
+   
+    print("Επαναφορά δεδομένων φορτιστών...")
     
     try:
-        print("🌐 Προσπάθεια σύνδεσης με API...")
+        print("Προσπάθεια σύνδεσης με API...")
         response = requests.post("https://localhost:9876/api/admin/resetpoints", timeout=5)
         
         if response.status_code == 200:
-            print("✅ Επιτυχής επαναφορά!")
+            print("Επιτυχής επαναφορά!")
             try:
                 return response.json()
             except:
                 return {"status": "success", "message": "Database reset completed"}
         else:
-            print(f"❌ API error: HTTP {response.status_code}")
+            print(f" API error: HTTP {response.status_code}")
             return {"error": f"Reset failed: {response.status_code}"}
             
     except requests.exceptions.ConnectionError:
-        print("❌ API NOT READY - Mock response")
+        print("API NOT READY - Mock response")
         return {
             "status": "success",
             "message": "Mock: Database would be reset from default JSON file",
             "mock_note": "API not available"
         }
     except Exception as e:
-        print(f"⚠️ Error: {e}")
+        print(f"Error: {e}")
         return {"error": str(e)}
     
 
 def pointstatus_command(point_id, date_from, date_to, format_type='json'):
-    """Εκτελεί την εντολή pointstatus για ιστορικό αλλαγών κατάστασης"""
-    print(f"📈 Ιστορικό κατάστασης φορτιστή ID: {point_id}")
+    
+    print(f" Ιστορικό κατάστασης φορτιστή ID: {point_id}")
     print(f"   Από: {date_from} έως: {date_to}")
     
     try:
-        print("🌐 Προσπάθεια σύνδεσης με API...")
+        print("Προσπάθεια σύνδεσης με API...")
         url = f"https://localhost:9876/api/pointstatus/{point_id}/{date_from}/{date_to}"
         params = {}
         if format_type:
@@ -580,27 +576,27 @@ def pointstatus_command(point_id, date_from, date_to, format_type='json'):
         response = requests.get(url, params=params, timeout=5)
         
         if response.status_code == 200:
-            print("✅ Το API βρέθηκε!")
+            print("API βρέθηκε!")
             if format_type == 'csv':
                 return response.text
             else:
                 return response.json()
         else:
-            print(f"❌ API error: HTTP {response.status_code}")
+            print(f" API error: HTTP {response.status_code}")
             return get_mock_pointstatus(point_id, date_from, date_to)
             
     except requests.exceptions.ConnectionError:
-        print("❌ API NOT READY - Χρήση mock δεδομένων...")
+        print("API NOT READY - Χρήση mock δεδομένων...")
         return get_mock_pointstatus(point_id, date_from, date_to, format_type)
     except Exception as e:
-        print(f"⚠️ Error: {e}")
+        print(f" Error: {e}")
         return {"error": str(e)}
     
 
 
 def reserve_command(point_id, minutes=None):
-    """Εκτελεί την εντολή reserve για δέσμευση φορτιστή"""
-    print(f"🔒 Δέσμευση φορτιστή ID: {point_id}")
+   
+    print(f" Δέσμευση φορτιστή ID: {point_id}")
     if minutes:
         print(f"   Διάρκεια: {minutes} λεπτά")
     else:
@@ -608,7 +604,7 @@ def reserve_command(point_id, minutes=None):
     
     # Προσπάθεια σύνδεσης με το πραγματικό API
     try:
-        print("🌐 Προσπάθεια σύνδεσης με το API...")
+        print(" Προσπάθεια σύνδεσης με το API...")
         
         # Κατασκευή URL σύμφωνα με προδιαγραφές
         if minutes:
@@ -619,30 +615,30 @@ def reserve_command(point_id, minutes=None):
         response = requests.post(url, timeout=5)
         
         if response.status_code == 200:
-            print("✅ Επιτυχής δέσμευση!")
+            print("Επιτυχής δέσμευση!")
             return response.json()
         elif response.status_code == 400:
-            print("❌ Ο φορτιστής δεν είναι διαθέσιμος για δέσμευση")
+            print("φορτιστής δεν είναι διαθέσιμος for δέσμευση")
             return get_mock_reservation_failed(point_id, minutes)
         else:
-            print(f"❌ API error: HTTP {response.status_code}")
+            print(f" API error: HTTP {response.status_code}")
             return get_mock_reservation_failed(point_id, minutes)
             
     except requests.exceptions.ConnectionError:
-        print("❌ API NOT READY - Χρήση mock δεδομένων...")
+        print("API NOT READY - Χρήση mock δεδομένων...")
         return get_mock_reservation_success(point_id, minutes)
     except Exception as e:
-        print(f"⚠️ Error: {e}")
+        print(f"Error: {e}")
         return {"error": str(e)}
     
 
 def sessions_command(point_id, date_from, date_to, format_type='json'):
-    """Εκτελεί την εντολή sessions για ιστορικό φορτίσεων"""
-    print(f"📊 Ιστορικό φορτίσεων φορτιστή ID: {point_id}")
+    
+    print(f"Ιστορικό φορτίσεων φορτιστή ID: {point_id}")
     print(f"   Από: {date_from} έως: {date_to}")
     
     try:
-        print("🌐 Προσπάθεια σύνδεσης με API...")
+        print("Προσπάθεια σύνδεσης με API...")
         url = f"https://localhost:9876/api/sessions/{point_id}/{date_from}/{date_to}"
         params = {}
         if format_type:
@@ -651,27 +647,27 @@ def sessions_command(point_id, date_from, date_to, format_type='json'):
         response = requests.get(url, params=params, timeout=5)
         
         if response.status_code == 200:
-            print("✅ Το API βρέθηκε!")
+            print("API βρέθηκε!")
             if format_type == 'csv':
                 return response.text
             else:
                 return response.json()
         else:
-            print(f"❌ API error: HTTP {response.status_code}")
+            print(f" API error: HTTP {response.status_code}")
             return get_mock_sessions(point_id, date_from, date_to, format_type)
             
     except requests.exceptions.ConnectionError:
-        print("❌ API NOT READY - Χρήση mock δεδομένων...")
+        print("API NOT READY - Χρήση mock δεδομένων...")
         return get_mock_sessions(point_id, date_from, date_to, format_type)
     except Exception as e:
-        print(f"⚠️ Error: {e}")
+        print(f"Error: {e}")
         return {"error": str(e)}
 
 
 
 def newsession_command(point_id, starttime, endtime, startsoc, endsoc, 
                        totalkwh, kwhprice, amount):
-    """Εκτελεί την εντολή newsession για καταγραφή νέας φόρτισης"""
+    
     print(f"⚡ Καταγραφή νέας φόρτισης")
     print(f"   Φορτιστής: {point_id}")
     print(f"   Από: {starttime} έως: {endtime}")
@@ -681,7 +677,7 @@ def newsession_command(point_id, starttime, endtime, startsoc, endsoc,
     print(f"   Σύνολο: €{amount}")
     
     try:
-        print("🌐 Προσπάθεια σύνδεσης με API...")
+        print(" Προσπάθεια σύνδεσης με API...")
         
         # Προετοιμασία δεδομένων
         session_data = {
@@ -700,23 +696,23 @@ def newsession_command(point_id, starttime, endtime, startsoc, endsoc,
         response = requests.post(url, json=session_data, timeout=5)
         
         if response.status_code == 200:
-            print("✅ Φόρτιση καταγράφηκε επιτυχώς!")
+            print("Φόρτιση καταγράφηκε επιτυχώς!")
             return {"status": "success", "message": "Charging session recorded"}
         else:
-            print(f"❌ API error: HTTP {response.status_code}")
+            print(f" API error: HTTP {response.status_code}")
             return get_mock_newsession_error(session_data)
             
     except requests.exceptions.ConnectionError:
-        print("❌ API NOT READY - Χρήση mock δεδομένων...")
+        print("API NOT READY - Χρήση mock δεδομένων...")
         return get_mock_newsession_success(session_data)
     except Exception as e:
-        print(f"⚠️ Error: {e}")
+        print(f" Error: {e}")
         return {"error": str(e)}
 
 def main():
     parser = argparse.ArgumentParser(
         prog='se2551',  
-        description='CLI για διαχείριση φορτιστών ηλεκτρικών οχημάτων'
+        description='CLI for διαχείριση φορτιστών ηλεκτρικών οχημάτων'
     )
     
     subparsers = parser.add_subparsers(dest='command', help='Διαθέσιμες εντολές')
@@ -737,7 +733,7 @@ def main():
                           help='Μορφή εξόδου (default: json)')
     
     point_parser = subparsers.add_parser('point', 
-                                        help='Πληροφορίες για συγκεκριμένο φορτιστή')
+                                        help='Πληροφορίες gia συγκεκριμένο φορτιστή')
     point_parser.add_argument('--id',
                             required=True,
                             type=str,
@@ -760,7 +756,7 @@ def main():
     # Προαιρετική παράμετρος για δημιουργία sample CSV
     addpoints_parser.add_argument('--create-sample',
                                 action='store_true',
-                                help='Δημιουργεί ένα δείγμα CSV αρχείο για testing')
+                                help='Δημιουργεί ένα δείγμα CSV αρχείο gia testing')
     
 
         # 5. Updpoint command (ενημέρωση φορτιστή)
@@ -798,7 +794,7 @@ def main():
     pointstatus_parser.add_argument('--format', choices=['json', 'csv'], default='json')
 
     reserve_parser = subparsers.add_parser('reserve', 
-                                         help='Δέσμευση φορτιστή για συγκεκριμένο χρόνο')
+                                         help='Δέσμευση φορτιστή gia συγκεκριμένο χρόνο')
     reserve_parser.add_argument('--id', required=True, help='ID του φορτιστή')
     reserve_parser.add_argument('--minutes', type=int, 
                               help='Διάρκεια δέσμευσης σε λεπτά (max 60, default: 30)')
@@ -841,16 +837,15 @@ def main():
     
     args = parser.parse_args()
     
-    # Εκτέλεση της επιλεγμένης εντολής
-        # Εκτέλεση της επιλεγμένης εντολής
+    
     if args.command == 'healthcheck':
         healthcheck_command()
 
-    elif args.command == 'points':  # <-- ΝΕΑ ΓΡΑΜΜΗ
+    elif args.command == 'points':  
         data = points_command(status=args.status, format_type=args.format)
         
-        # Εμφάνιση αποτελεσμάτων ΜΟΝΟ για points
-        print("\n📊 ΑΠΟΤΕΛΕΣΜΑΤΑ:")
+        
+        print("\n ΑΠΟΤΕΛΕΣΜΑΤΑ:")
         if args.format == 'csv':
             print(data)
         else:
@@ -860,8 +855,8 @@ def main():
     elif args.command == 'point':
         data = point_command(point_id=args.id)
         
-        # Εμφάνιση αποτελεσμάτων
-        print("\n📊 ΑΠΟΤΕΛΕΣΜΑΤΑ:")
+       
+        print("\n ΑΠΟΤΕΛΕΣΜΑΤΑ:")
         if args.format == 'csv':
             # Για point, το CSV πρέπει να είναι ειδική μορφή
             if isinstance(data, dict) and 'pointid' in data:
@@ -872,26 +867,26 @@ def main():
                 csv_output += f"{data.get('reservationendtime', '')}__{data.get('kwhprice', '')}"
                 print(csv_output)
             else:
-                print("Δεν υπάρχουν δεδομένα για CSV μετατροπή")
+                print("Δεν υπάρχουν δεδομένα gia CSV μετατροπή")
         else:
             print(json.dumps(data, indent=2, ensure_ascii=False))
 
     elif args.command == 'addpoints':
-        # Αν ζητήθηκε δημιουργία sample CSV
+        # sample CSV
         if args.create_sample:
-            sample_file = create_sample_csv("sample_chargers.csv")
-            print(f"✅ Δημιουργήθηκε το αρχείο: {sample_file}")
+            sample_file = create_sample_csv("sample_chargers.csv") # type: ignore
+            print(f"Δημιουργήθηκε το αρχείο: {sample_file}")
             print(f"   Τώρα μπορείς να τρέξεις: python cli.py addpoints --source {sample_file}")
         else:
             # Κανονική εκτέλεση addpoints
             result = addpoints_command(csv_file_path=args.source)
-            print("\n📊 ΑΠΟΤΕΛΕΣΜΑΤΑ:")
+            print("\n ΑΠΟΤΕΛΕΣΜΑΤΑ:")
             print(json.dumps(result, indent=2, ensure_ascii=False))
 
     elif args.command == 'updpoint':
         # Έλεγχος ότι δόθηκε τουλάχιστον μία παράμετρος
         if args.status is None and args.price is None:
-            print("❌ Σφάλμα: Πρέπει να δοθεί τουλάχιστον ένα από --status ή --price")
+            print(" Σφάλμα: Πρέπει na δοθεί τουλάχιστον ένα από --status ή --price")
             print("   Χρήση: python cli.py updpoint --id 123 --status available")
             print("   ή: python cli.py updpoint --id 123 --price 0.40")
             print("   ή: python cli.py updpoint --id 123 --status charging --price 0.45")
@@ -900,15 +895,15 @@ def main():
         # Εκτέλεση της εντολής
         result = updpoint_command(point_id=args.id, status=args.status, price=args.price)
         
-        # Εμφάνιση αποτελεσμάτων
-        print("\n📊 ΑΠΟΤΕΛΕΣΜΑΤΑ:")
+       
+        print("\nΑΠΟΤΕΛΕΣΜΑΤΑ:")
         print(json.dumps(result, indent=2, ensure_ascii=False))
 
 
     
     elif args.command == 'resetpoints':
         result = resetpoints_command()
-        print("\n📊 ΑΠΟΤΕΛΕΣΜΑΤΑ:")
+        print("\n ΑΠΟΤΕΛΕΣΜΑΤΑ:")
         print(json.dumps(result, indent=2, ensure_ascii=False))
 
 
@@ -926,12 +921,12 @@ def main():
 
     elif args.command == 'reserve':
         result = reserve_command(point_id=args.id, minutes=args.minutes)
-        print("\n📊 ΑΠΟΤΕΛΕΣΜΑΤΑ:")
+        print("\nΑΠΟΤΕΛΕΣΜΑΤΑ:")
         print(json.dumps(result, indent=2, ensure_ascii=False))
         
         # Ειδική εμφάνιση για επιτυχημένη δέσμευση
         if result.get('status') == 'reserved':
-            print(f"\n✅ ΔΕΣΜΕΥΣΗ ΕΠΙΤΥΧΗΣ!")
+            print(f"\nΔΕΣΜΕΥΣΗ ΕΠΙΤΥΧΗΣ")
             print(f"   Φορτιστής: {result['pointid']}")
             print(f"   Λήγει στις: {result['reservationendtime']}")
             if 'mock_note' in result:
@@ -943,7 +938,7 @@ def main():
                                 date_from=args.date_from, 
                                 date_to=args.date_to,
                                 format_type=args.format)
-        print("\n📊 ΑΠΟΤΕΛΕΣΜΑΤΑ:")
+        print("\n ΑΠΟΤΕΛΕΣΜΑΤΑ:")
         if args.format == 'csv':
             print(result)
         else:
@@ -954,7 +949,7 @@ def main():
             total_sessions = len(result)
             total_kwh = sum(session.get('totalkwh', 0) for session in result)
             total_amount = sum(session.get('amount', 0) for session in result)
-            print(f"\n📈 ΣΤΑΤΙΣΤΙΚΑ:")
+            print(f"\n ΣΤΑΤΙΣΤΙΚΑ:")
             print(f"   Συνολικές φορτίσεις: {total_sessions}")
             print(f"   Συνολική ενέργεια: {total_kwh:.1f} kWh")
             print(f"   Συνολικό κόστος: €{total_amount:.2f}")
@@ -971,10 +966,10 @@ def main():
             kwhprice=args.kwhprice,
             amount=args.amount
         )
-        print("\n📊 ΑΠΟΤΕΛΕΣΜΑΤΑ:")
+        print("\n ΑΠΟΤΕΛΕΣΜΑΤΑ:")
         print(json.dumps(result, indent=2, ensure_ascii=False))
         
-        # Ειδική εμφάνιση για επιτυχία
+        
         if result.get('status') == 'success':
             print(f"\n✅ ΦΟΡΤΙΣΗ ΚΑΤΑΓΡΑΦΗΚΕ!")
             print(f"   Session ID: {result.get('session_id', 'N/A')}")

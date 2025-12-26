@@ -2,6 +2,7 @@
 """
 WATTever CLI
 Ομάδα 51 - Τεχνολογία Λογισμικού 2025
+
 """
 
 import argparse

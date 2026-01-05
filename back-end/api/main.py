@@ -1,87 +1,287 @@
-import json
 import io
 import csv
+import json
+import mysql.connector
 from datetime import datetime, timedelta
 from fastapi import FastAPI, Request, Response, HTTPException, Form, File, UploadFile
 from fastapi.responses import JSONResponse
 from utils import create_error_log 
 from typing import Optional
+from pydantic import BaseModel
 
 app = FastAPI(title="WATTever API")
 API_PREFIX = "/api"
 
-# "Βάση δεδομένων" στη μνήμη
-db_points = []
-db_sessions = [] 
-db_status_changes = [] 
+# --- ΡΥΘΜΙΣΕΙΣ ΒΑΣΗΣ ΔΕΔΟΜΕΝΩΝ ---
+# Προσοχή: Βάλε εδώ τον κωδικό που έφτιαξες πριν
+DB_CONFIG = {
+    'host': 'localhost',
+    'user': 'softeng_user',
+    'password': 'softeng_pass',  
+    'database': 'wattever_db'
+}
 
-def flatten_data():
+def get_db_connection():
     try:
-        with open('part1.json', 'r', encoding='utf-8') as f:
-            raw_data = json.load(f)
-            points = []
-            for location in raw_data:
-                for station in location.get("stations", []):
-                    for outlet in station.get("outlets", []):
-                        points.append({
-                            "providerName": "WATTever",
-                            "pointid": str(outlet.get("id")),
-                            "lon": str(location.get("longitude")),
-                            "lat": str(location.get("latitude")),
-                            "status": (outlet.get("status") or "available").lower(),
-                            "cap": outlet.get("kilowatts") or 0,
-                            "kwhprice": 0.25,
-                            "reservationendtime": None
-                        })
-            return points
-    except FileNotFoundError: return []
+        conn = mysql.connector.connect(**DB_CONFIG)
+        return conn
+    except mysql.connector.Error as err:
+        # Αν αποτύχει η σύνδεση, πετάμε λάθος που θα πιάσει το FastAPI
+        raise HTTPException(status_code=500, detail=f"Database connection failed: {err}")
+    
+class UpdatePointInput(BaseModel):
+    status: Optional[str] = None
+    kwhprice: Optional[float] = None
+
+class SessionData(BaseModel):
+    pointid: str
+    starttime: str
+    endtime: str
+    startsoc: int
+    endsoc: int
+    totalkwh: float
+    kwhprice: float
+    amount: float
+
+class SessionInput(BaseModel):
+    pointid: str
+    starttime: str
+    endtime: str
+    startsoc: int
+    endsoc: int
+    totalkwh: float
+    kwhprice: float
+    amount: float
 
 # --- 1. /admin/healthcheck ---
 @app.get(f"{API_PREFIX}/admin/healthcheck")
 async def health_check(request: Request):
-    online = len([p for p in db_points if p['status'] != 'offline'])
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Μετράμε συνολικούς σταθμούς
+    cursor.execute("SELECT COUNT(*) FROM Charger")
+    total_chargers = cursor.fetchone()[0]
+    
+    # Μετράμε ενεργούς (online) σταθμούς (δηλ. όχι 'offline' ή 'outoforder')
+    cursor.execute("SELECT COUNT(*) FROM Charger WHERE status != 'offline' AND status != 'outoforder'")
+    online_chargers = cursor.fetchone()[0]
+    
+    conn.close()
+    
     return {
         "status": "OK",
-        "dbconnection": "mock_connection_string",
-        "n_charge_points": len(db_points),
-        "n_charge_points_online": online,
-        "n_charge_points_offline": len(db_points) - online
+        "dbconnection": f"mysql://{DB_CONFIG['user']}@localhost/{DB_CONFIG['database']}",
+        "n_charge_points": total_chargers,
+        "n_charge_points_online": online_chargers,
+        "n_charge_points_offline": total_chargers - online_chargers
     }
 
-# --- 2. /admin/resetpoints ---
+# --- 2. /admin/resetpoints (ΔΙΑΓΡΑΦΗ & ΕΠΑΝΑΦΟΡΑ) ---
+# Ορίζουμε το μονοπάτι του αρχείου ως καθολική σταθερά (Hardwired)
+INITIAL_DATA_FILE = "parts1234.json"
+
 @app.post(f"{API_PREFIX}/admin/resetpoints")
 async def reset_points():
-    global db_points, db_sessions, db_status_changes
-    db_points = flatten_data()
-    db_sessions = []
-    db_status_changes = []
-    return {"status": "OK"}
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # 1. ΚΑΘΑΡΙΣΜΟΣ ΤΗΣ ΒΑΣΗΣ (Σβήνουμε τα πάντα με τη σωστή σειρά λόγω Foreign Keys)
+        cursor.execute("DELETE FROM StatusHistory") # Αν έφτιαξες τον πίνακα
+        cursor.execute("DELETE FROM Transaction")
+        cursor.execute("DELETE FROM ChargingSession")
+        cursor.execute("DELETE FROM Reservation")
+        cursor.execute("DELETE FROM Charger")
+        cursor.execute("DELETE FROM Station")
+        # Σημείωση: Δεν σβήνουμε το PricingPolicy και τον User, αυτά είναι "σταθερά" (seed data)
+        
+        # 2. ΦΟΡΤΩΣΗ ΑΠΟ ΤΟ JSON (Hardwired file)
+        with open(INITIAL_DATA_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            
+        # 3. ΕΠΑΝΕΙΣΑΓΩΓΗ ΔΕΔΟΜΕΝΩΝ
+        # Λεξικό για Mapping Connector IDs -> (Type, AC/DC)
+        CONNECTOR_MAP = {
+            0: ("Unknown", "AC"), 2: ("J1772", "AC"), 3: ("CHAdeMO", "DC"),
+            7: ("Type 2", "AC"), 25: ("Type 2", "AC"), 1036: ("Type 2", "AC"),
+            13: ("CCS1", "DC"), 20: ("CCS2", "DC"), 30: ("Tesla HPWC", "DC"),
+            32: ("CCS1", "DC"), 33: ("CCS2", "DC")
+        }
+        
+        seen_stations = set()
+        seen_chargers = set()
+        
+        for location in data:
+            # --- Insert Station ---
+            s_id = str(location.get('id'))
+            if s_id not in seen_stations:
+                cursor.execute(
+                    "INSERT INTO Station (station_id, name, address, latitude, longtitude) VALUES (%s, %s, %s, %s, %s)",
+                    (s_id, location.get('name', 'Unknown'), location.get('address', 'Unknown'), 
+                     location.get('latitude', 0), location.get('longitude', 0))
+                )
+                seen_stations.add(s_id)
+            
+            # --- Insert Chargers ---
+            for station_wrapper in location.get('stations', []):
+                for outlet in station_wrapper.get('outlets', []):
+                    c_id = str(outlet.get('id'))
+                    if c_id not in seen_chargers:
+                        conn_id = outlet.get('connector')
+                        kw = outlet.get('kilowatts') or outlet.get('power') or 0.0
+                        
+                        # Apply Data Cleaning Logic (όπως κάναμε νωρίτερα)
+                        conn_type, curr_type = CONNECTOR_MAP.get(conn_id, ("Unknown", "AC"))
+                        
+                        # Διόρθωση μηδενικών KW
+                        if kw == 0:
+                            if curr_type == 'DC': kw = 50.0
+                            elif 'Type 2' in conn_type: kw = 22.0
+                            else: kw = 3.7
 
-# --- 3. /admin/addpoints (ΤΟ ΕΠΑΝΕΦΕΡΑ) ---
+                        cursor.execute(
+                            """INSERT INTO Charger 
+                               (charger_id, connector_type, current_type, max_power_kw, status, station_id, policy_id) 
+                               VALUES (%s, %s, %s, %s, 'AVAILABLE', %s, 'POL_DEFAULT')""",
+                            (c_id, conn_type, curr_type, kw, s_id)
+                        )
+                        seen_chargers.add(c_id)
+        
+        conn.commit()
+        return {"status": "OK"}
+        
+    except FileNotFoundError:
+        conn.rollback() # Ακύρωση αλλαγών αν δεν βρεθεί το αρχείο
+        return JSONResponse(status_code=500, content=create_error_log(Request, 500, "Initial JSON file not found"))
+    except Exception as e:
+        conn.rollback()
+        return JSONResponse(status_code=500, content=create_error_log(Request, 500, str(e)))
+    finally:
+        conn.close()
+
+# --- 3. /admin/addpoints (ΤΕΛΙΚΟ & ΛΕΙΤΟΥΡΓΙΚΟ) ---
 @app.post(f"{API_PREFIX}/admin/addpoints")
 async def add_points(file: UploadFile = File(...)):
-    global db_points
-    if file.content_type != 'text/csv':
-        raise HTTPException(status_code=400, detail="MIME type must be text/csv")
+    if file.content_type != 'text/csv' and not file.filename.endswith('.csv'):
+        # Κάποιοι clients στέλνουν application/vnd.ms-excel, οπότε ελέγχουμε και κατάληξη
+        raise HTTPException(status_code=400, detail="File must be a CSV")
     
     content = await file.read()
-    decoded = content.decode('utf-8')
+    try:
+        decoded = content.decode('utf-8')
+    except UnicodeDecodeError:
+        # Fallback αν το αρχείο δεν είναι utf-8
+        decoded = content.decode('latin-1')
+        
     reader = csv.DictReader(io.StringIO(decoded))
-    count = 0
-    for row in reader:
-        db_points.append(row)
-        count += 1
-    return {"status": "OK", "added": count}
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    count_chargers = 0
+    stations_added = 0
+    
+    try:
+        # Προετοιμασία λίστας για να ελέγχουμε duplicates στο Loop
+        # (Ή απλά βασιζόμαστε στο 'INSERT IGNORE' ή έλεγχο SELECT)
+        
+        for row in reader:
+            # 1. Καθαρισμός δεδομένων από το CSV
+            # Χρησιμοποιούμε .get() με default τιμές για ασφάλεια
+            sid = row.get('station_id', '').strip()
+            cid = row.get('charger_id', '').strip()
+            
+            if not sid or not cid:
+                continue # Προσπερνάμε κενές γραμμές
+            
+            name = row.get('name', 'Unknown Station')
+            addr = row.get('address', 'Unknown Address')
+            lat = float(row.get('latitude', 0))
+            lon = float(row.get('longitude', 0)) # Προσοχή αν στο CSV είναι 'longtitude'
+            
+            conn_type = row.get('connector_type', 'Unknown')
+            try:
+                kw = float(row.get('max_power_kw', 0))
+            except ValueError:
+                kw = 0.0
+            
+            # 2. Υπολογισμός AC/DC
+            # Απλή λογική: Αν είναι CCS/CHAdeMO ή > 40kW είναι DC, αλλιώς AC
+            if 'CCS' in conn_type or 'CHAdeMO' in conn_type or kw > 40:
+                curr_type = 'DC'
+            else:
+                curr_type = 'AC'
 
-# --- 4. /points ---
+            # 3. Εισαγωγή Σταθμού (Αν δεν υπάρχει)
+            cursor.execute("SELECT station_id FROM Station WHERE station_id = %s", (sid,))
+            if not cursor.fetchone():
+                cursor.execute(
+                    "INSERT INTO Station (station_id, name, address, latitude, longtitude) VALUES (%s, %s, %s, %s, %s)",
+                    (sid, name, addr, lat, lon)
+                )
+                stations_added += 1
+            
+            # 4. Εισαγωγή Φορτιστή
+            # Χρησιμοποιούμε INSERT IGNORE ή ελέγχουμε αν υπάρχει για να μην σκάσει σε duplicates
+            cursor.execute("SELECT charger_id FROM Charger WHERE charger_id = %s", (cid,))
+            if not cursor.fetchone():
+                cursor.execute(
+                    """INSERT INTO Charger 
+                       (charger_id, connector_type, current_type, max_power_kw, status, station_id, policy_id) 
+                       VALUES (%s, %s, %s, %s, 'AVAILABLE', %s, 'POL_DEFAULT')""",
+                    (cid, conn_type, curr_type, kw, sid)
+                )
+                count_chargers += 1
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        # Επιστρέφουμε error log όπως ζητάει η εκφώνηση
+        return JSONResponse(status_code=500, content=create_error_log(request, 500, f"CSV Import Error: {str(e)}"))
+        
+    conn.close()
+    
+    return {
+        "status": "OK", 
+        "chargers_added": count_chargers,
+        "stations_created": stations_added
+    }
+
+# --- 4. /points (ΑΝΑΖΗΤΗΣΗ ΣΗΜΕΙΩΝ) ---
 @app.get(f"{API_PREFIX}/points")
 async def get_points(request: Request, status: str = None, format: str = "json"):
-    data = db_points
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True) # Επιστρέφει dict αντί για tuple
+    
+    query = """
+        SELECT 
+            c.charger_id as pointid,
+            s.latitude as lat,
+            s.longtitude as lon,
+            c.status,
+            c.max_power_kw as cap,
+            pp.fixed_price_kwh as kwhprice,
+            'WATTever' as providerName
+        FROM Charger c
+        JOIN Station s ON c.station_id = s.station_id
+        JOIN PricingPolicy pp ON c.policy_id = pp.policy_id
+    """
+    
+    params = []
     if status:
-        valid = ["available", "charging", "reserved", "malfunction", "offline"]
-        if status not in valid:
+        valid = ["available", "charging", "reserved", "outoforder", "offline"]
+        if status.lower() not in valid:
+            conn.close()
             return JSONResponse(status_code=400, content=create_error_log(request, 400, "Invalid status"))
-        data = [p for p in data if p.get("status") == status]
+        
+        query += " WHERE c.status = %s"
+        params.append(status.upper()) # Η βάση έχει κεφαλαία συνήθως ή case-insensitive
+    
+    cursor.execute(query, params)
+    data = cursor.fetchall()
+    conn.close()
     
     if format == "csv":
         output = io.StringIO()
@@ -89,108 +289,255 @@ async def get_points(request: Request, status: str = None, format: str = "json")
             writer = csv.DictWriter(output, fieldnames=data[0].keys(), delimiter=',')
             writer.writeheader()
             writer.writerows(data)
-        # Αντικατάσταση για το delimiter ", " βάσει εκφώνησης
         return Response(content=output.getvalue().replace(',', ', '), media_type="text/csv")
+        
     return data
 
 # --- 5. /point/{id} ---
 @app.get(API_PREFIX + "/point/{point_id}")
 async def get_point_details(request: Request, point_id: str):
-    point = next((p for p in db_points if str(p["pointid"]) == point_id), None)
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    # Κάνουμε JOIN και με τον πίνακα Reservation για να δούμε αν υπάρχει ενεργή κράτηση
+    # Ψάχνουμε κράτηση που είναι 'ACTIVE' και δεν έχει λήξει ακόμα (expiration_time > NOW())
+    query = """
+        SELECT 
+            c.charger_id as pointid,
+            s.latitude as lat,
+            s.longtitude as lon,
+            c.status,
+            c.max_power_kw as cap,
+            pp.fixed_price_kwh as kwhprice,
+            r.expiration_time as reservationendtime
+        FROM Charger c
+        JOIN Station s ON c.station_id = s.station_id
+        JOIN PricingPolicy pp ON c.policy_id = pp.policy_id
+        LEFT JOIN Reservation r ON c.charger_id = r.charger_id 
+             AND r.status = 'ACTIVE' 
+             AND r.expiration_time > NOW()
+        WHERE c.charger_id = %s
+    """
+    cursor.execute(query, (point_id,))
+    point = cursor.fetchone()
+    conn.close()
+    
     if not point:
         return JSONResponse(status_code=404, content=create_error_log(request, 404, "Point not found"))
     
-    res_time = point.get("reservationendtime") or datetime.now().strftime("%Y-%m-%d %H:%M")
-    return {**point, "reservationendtime": res_time}
+    # Μετατροπή της ημερομηνίας σε string για να μην χτυπήσει το JSON
+    if point["reservationendtime"]:
+        point["reservationendtime"] = point["reservationendtime"].strftime("%Y-%m-%d %H:%M")
+    
+    return point
 
-# --- 6. /reserve/{id} (Διπλό path για προαιρετικό minutes) ---
+# --- 6. /reserve/{id} ---
 @app.post(API_PREFIX + "/reserve/{point_id}")
 @app.post(API_PREFIX + "/reserve/{point_id}/{minutes}")
 async def reserve_point(request: Request, point_id: str, minutes: int = 30):
-    point = next((p for p in db_points if str(p["pointid"]) == point_id), None)
-    if not point or point["status"] != "available":
-        return JSONResponse(status_code=400, content=create_error_log(request, 400, "Cannot reserve"))
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
     
+    # 1. Έλεγχος αν υπάρχει και είναι διαθέσιμο
+    cursor.execute("SELECT status FROM Charger WHERE charger_id = %s", (point_id,))
+    point = cursor.fetchone()
+    
+    if not point or point["status"] != "AVAILABLE":
+        conn.close()
+        return JSONResponse(status_code=400, content=create_error_log(request, 400, "Cannot reserve (not available)"))
+    
+    # 2. Δημιουργία κράτησης
     actual_minutes = min(60, minutes)
     end_time = datetime.now() + timedelta(minutes=actual_minutes)
     
-    db_status_changes.append({
-        "timeref": datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "pointid": point_id,
-        "old_state": point["status"],
-        "new_state": "reserved"
-    })
+    # Ενημέρωση πίνακα Charger
+    cursor.execute("UPDATE Charger SET status = 'RESERVED' WHERE charger_id = %s", (point_id,))
     
-    point["status"] = "reserved"
-    point["reservationendtime"] = end_time.strftime("%Y-%m-%d %H:%M")
+    # Εισαγωγή στον πίνακα Reservation (Χρειάζεται ένα user_id, βάζουμε τον test user 'USR_001')
+    res_id = f"RES_{point_id}_{int(datetime.now().timestamp())}"
+    cursor.execute("""
+        INSERT INTO Reservation (reservation_id, expiration_time, status, user_id, charger_id)
+        VALUES (%s, %s, 'ACTIVE', 'USR_001', %s)
+    """, (res_id, end_time, point_id))
     
-    return {"pointid": point_id, "status": "reserved", "reservationendtime": point["reservationendtime"]}
-
-# --- 7. /updpoint/{id} (Βελτιωμένο) ---
-@app.post(API_PREFIX + "/updpoint/{point_id}")
-async def update_point(request: Request, point_id: str, status: Optional[str] = Form(None), kwhprice: Optional[float] = Form(None)):
-    # Βρίσκουμε το σημείο
-    point = next((p for p in db_points if str(p["pointid"]) == point_id), None)
+    conn.commit()
+    conn.close()
     
-    if not point:
-        return JSONResponse(status_code=404, content=create_error_log(request, 404, "Point not found"))
-    
-    # Ενημερώνουμε το status ΜΟΝΟ αν δωθεί τιμή και αν δεν είναι η προεπιλεγμένη "string" του Swagger
-    if status and status.lower() != "string":
-        point["status"] = status.lower()
-    
-    # Ενημερώνουμε την τιμή αν δωθεί
-    if kwhprice is not None:
-        point["kwhprice"] = kwhprice
-        
     return {
-        "pointid": point["pointid"],
-        "status": point["status"],
-        "kwhprice": point["kwhprice"]
+        "pointid": point_id, 
+        "status": "reserved", 
+        "reservationendtime": end_time.strftime("%Y-%m-%d %H:%M")
     }
 
-# --- 8. /newsession (Έναρξη - Διορθωμένο) ---
-@app.post(API_PREFIX + "/newsession")
-async def new_session(pointid: str = Form(...), vehicleid: str = Form(...), userid: str = Form(...)):
-    # Βρίσκουμε τον φορτιστή
-    point = next((p for p in db_points if str(p["pointid"]) == pointid), None)
+# --- 7. /updpoint/{id} (ΤΕΛΙΚΟ & ΠΛΗΡΕΣ ΜΕ ΙΣΤΟΡΙΚΟ) ---
+@app.post(API_PREFIX + "/updpoint/{point_id}")
+async def update_point(request: Request, point_id: str, input_data: UpdatePointInput):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
     
-    if not point:
+    # 1. Βρίσκουμε τον φορτιστή και την τρέχουσα πολιτική του
+    cursor.execute("""
+        SELECT c.*, pp.fixed_price_kwh 
+        FROM Charger c
+        JOIN PricingPolicy pp ON c.policy_id = pp.policy_id
+        WHERE c.charger_id = %s
+    """, (point_id,))
+    
+    current_point = cursor.fetchone()
+    
+    if not current_point:
+        conn.close()
         return JSONResponse(status_code=404, content=create_error_log(request, 404, "Point not found"))
 
-    # ΚΑΤΑΓΡΑΦΗ ΜΕΤΑΒΟΛΗΣ (για το /pointstatus)
-    db_status_changes.append({
-        "timeref": datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "pointid": pointid,
-        "old_state": point["status"], # π.χ. available ή reserved
-        "new_state": "charging"
-    })
+    # --- ΔΙΑΧΕΙΡΙΣΗ STATUS ---
+    new_status = current_point['status'] # Default το παλιό
     
-    # Αλλαγή κατάστασης στον φορτιστή
-    point["status"] = "charging"
+    if input_data.status is not None:
+        # Έλεγχος αν δόθηκε έγκυρο status
+        valid_statuses = ["available", "charging", "reserved", "outoforder", "offline"]
+        if input_data.status.lower() not in valid_statuses:
+            conn.close()
+            return JSONResponse(status_code=400, content=create_error_log(request, 400, "Invalid status"))
+        
+        new_status = input_data.status.upper() # Η βάση τα θέλει κεφαλαία συνήθως
+        
+        # Ενημέρωση μόνο αν ΠΡΑΓΜΑΤΙΚΑ άλλαξε η κατάσταση
+        if new_status != current_point['status']:
+            try:
+                # Α. Καταγραφή στο Ιστορικό (StatusHistory)
+                # Υποθέτω ότι ο πίνακας έχει στήλες: point_id, old_status, new_status, change_time
+                # Το NOW() είναι συνάρτηση της SQL για την τρέχουσα ώρα
+                cursor.execute("""
+                    INSERT INTO StatusHistory (point_id, old_status, new_status, change_time)
+                    VALUES (%s, %s, %s, NOW())
+                """, (point_id, current_point['status'], new_status))
+                
+                # Β. Ενημέρωση του πίνακα Charger
+                cursor.execute("UPDATE Charger SET status = %s WHERE charger_id = %s", (new_status, point_id))
+            except mysql.connector.Error as err:
+                conn.close()
+                return JSONResponse(status_code=500, content=create_error_log(request, 500, f"History Error: {err}"))
+
+    # --- ΔΙΑΧΕΙΡΙΣΗ ΤΙΜΗΣ (Η Έξυπνη Λογική) ---
+    new_price = float(current_point['fixed_price_kwh']) # Default η παλιά
     
-    # Καταγραφή του Session
-    session = {
-        "session_id": len(db_sessions) + 1,
-        "pointid": pointid,
-        "vehicleid": vehicleid,
-        "userid": userid,
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M")
+    if input_data.kwhprice is not None:
+        requested_price = float(input_data.kwhprice)
+        
+        if requested_price != new_price:
+            # Ψάχνουμε αν υπάρχει ΗΔΗ πολιτική με αυτή την τιμή
+            cursor.execute("SELECT policy_id FROM PricingPolicy WHERE fixed_price_kwh = %s LIMIT 1", (requested_price,))
+            existing_policy = cursor.fetchone()
+            
+            new_policy_id = ""
+            
+            if existing_policy:
+                # Περίπτωση Α: Υπάρχει, την χρησιμοποιούμε
+                new_policy_id = existing_policy['policy_id']
+            else:
+                # Περίπτωση Β: Δεν υπάρχει, φτιάχνουμε νέα
+                # Δημιουργία μοναδικού ID, π.χ. 'POL_0_45'
+                new_policy_id = f"POL_{requested_price:.2f}".replace('.', '_')
+                
+                try:
+                    cursor.execute("""
+                        INSERT INTO PricingPolicy (policy_id, policy_type, name, fixed_price_kwh, margin_kwh, session_fee)
+                        VALUES (%s, 'Custom', %s, %s, 0.05, 1.00)
+                    """, (new_policy_id, f"Custom Policy {requested_price}E", requested_price))
+                except mysql.connector.Error:
+                    # Αν χτυπήσει (π.χ. υπάρχει ήδη το ID), συνεχίζουμε
+                    pass
+            
+            # Ενημερώνουμε τον φορτιστή με το νέο Policy ID
+            cursor.execute("UPDATE Charger SET policy_id = %s WHERE charger_id = %s", (new_policy_id, point_id))
+            new_price = requested_price
+
+    conn.commit()
+    conn.close()
+        
+    # Επιστροφή της νέας κατάστασης όπως ζητάει η εκφώνηση
+    return {
+        "pointid": point_id,
+        "status": new_status.lower(), 
+        "kwhprice": new_price
     }
-    db_sessions.append(session)
+
+# --- 8. /newsession (Έναρξη Φόρτισης) ---
+@app.post(API_PREFIX + "/newsession")
+async def new_session(request: Request, input_data: SessionInput):
+    conn = get_db_connection()
+    cursor = conn.cursor()
     
+    # 1. Έλεγχος αν υπάρχει ο φορτιστής
+    cursor.execute("SELECT charger_id FROM Charger WHERE charger_id = %s", (input_data.pointid,))
+    if not cursor.fetchone():
+        conn.close()
+        return JSONResponse(status_code=404, content=create_error_log(request, 404, "Point not found"))
+    
+    # 2. Δημιουργία Session ID
+    sess_id = f"SESS_{input_data.pointid}_{int(datetime.now().timestamp())}"
+    
+    # 3. Εισαγωγή στη Βάση
+    # ΠΡΟΣΟΧΗ: Χρησιμοποιούμε τα νέα πεδία start_soc, end_soc, cost_per_kwh, vehicle_id
+    try:
+        cursor.execute("""
+            INSERT INTO ChargingSession 
+            (session_id, start_time, charging_end_time, total_kwh, cost_per_kwh, total_cost, 
+             start_soc, end_soc, 
+             user_id, vehicle_id, charger_id, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'USR_001', 'VEH_001', %s, 'FINISHED')
+        """, (
+            sess_id, 
+            input_data.starttime, 
+            input_data.endtime, 
+            input_data.totalkwh, 
+            input_data.kwhprice,  # Αυτό πάει στο cost_per_kwh
+            input_data.amount,    # Αυτό πάει στο total_cost
+            input_data.startsoc,
+            input_data.endsoc,
+            input_data.pointid
+        ))
+        
+        # Ενημέρωση ότι ο φορτιστής είναι ξανά AVAILABLE
+        cursor.execute("UPDATE Charger SET status = 'AVAILABLE' WHERE charger_id = %s", (input_data.pointid,))
+        
+        conn.commit()
+    except mysql.connector.Error as err:
+        conn.close()
+        return JSONResponse(status_code=500, content=create_error_log(request, 500, f"DB Error: {err}"))
+
+    conn.close()
     return {"status": "OK"}
 
-# --- 9. /sessions/{id}/{from}/{to} ---
+# --- 9. /sessions (Αναζήτηση) ---
 @app.get(API_PREFIX + "/sessions/{point_id}/{date_from}/{date_to}")
 async def get_sessions(point_id: str, date_from: str, date_to: str):
-    results = [s for s in db_sessions if s["pointid"] == point_id]
-    return results
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    # Μετατροπή string dates (YYYYMMDD) σε MySQL format
+    try:
+        d_from = datetime.strptime(date_from, "%Y%m%d")
+        d_to = datetime.strptime(date_to, "%Y%m%d") + timedelta(days=1) # +1 για να πιάσει όλη τη μέρα
+    except ValueError:
+         return JSONResponse(status_code=400, content={"error": "Invalid date format. Use YYYYMMDD"})
 
-# --- 10. /pointstatus/{id}/{from}/{to} ---
-@app.get(API_PREFIX + "/pointstatus/{point_id}/{date_from}/{date_to}")
-async def get_point_status(point_id: str, date_from: str, date_to: str):
-    results = [s for s in db_status_changes if s["pointid"] == point_id]
+    query = """
+        SELECT * FROM ChargingSession 
+        WHERE charger_id = %s 
+        AND start_time >= %s AND start_time < %s
+    """
+    cursor.execute(query, (point_id, d_from, d_to))
+    results = cursor.fetchall()
+    
+    # Διόρθωση datetime objects για να γίνουν JSON serializable
+    for r in results:
+        if isinstance(r['start_time'], datetime):
+            r['start_time'] = r['start_time'].strftime("%Y-%m-%d %H:%M:%S")
+        if r['charging_end_time']:
+            r['charging_end_time'] = r['charging_end_time'].strftime("%Y-%m-%d %H:%M:%S")
+            
+    conn.close()
     return results
 
 @app.exception_handler(HTTPException)

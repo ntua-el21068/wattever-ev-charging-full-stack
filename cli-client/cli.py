@@ -265,7 +265,7 @@ def healthcheck_command():
     
     try:
         print(" Προσπάθεια σύνδεσης με το API...")
-        response = requests.get("https://localhost:9876/api/admin/healthcheck", timeout=3)
+        response = requests.get("http://localhost:9876/api/admin/healthcheck", timeout=3)
         
         if response.status_code == 200:
             data = response.json()
@@ -308,7 +308,7 @@ def points_command(status=None, format_type='json'):
         print(" Προσπάθεια σύνδεσης με το API...")
         
         # Κατασκευή URL με παραμέτρους
-        url = "https://localhost:9876/api/points"
+        url = "http://localhost:9876/api/points"
         params = {}
         if status:
             params['status'] = status
@@ -358,7 +358,7 @@ def point_command(point_id):
         print("Προσπάθεια σύνδεσης με το API...")
         
         
-        url = f"https://localhost:9876/api/point/{point_id}"
+        url = f"http://localhost:9876/api/point/{point_id}"
         
         response = requests.get(url, timeout=3)
         
@@ -410,7 +410,7 @@ def addpoints_command(csv_file_path):
         print("Προσπάθεια σύνδεσης με το API...")
         
         # Κατασκευή URL
-        url = "https://localhost:9876/api/admin/addpoints"
+        url = "http://localhost:9876/api/admin/addpoints"
         
         # Άνοιγμα και αποστολή του CSV αρχείου
         with open(csv_file_path, 'rb') as csv_file:
@@ -485,7 +485,7 @@ def updpoint_command(point_id, status=None, price=None):
         print(" Προσπάθεια σύνδεσης με το API...")
         
         # Κατασκευή URL
-        url = f"https://localhost:9876/api/updpoint/{point_id}"
+        url = f"http://localhost:9876/api/updpoint/{point_id}"
         
         # Αποστολή POST request με JSON body
         response = requests.post(url, json=update_data, timeout=5)
@@ -538,7 +538,7 @@ def resetpoints_command():
     
     try:
         print("Προσπάθεια σύνδεσης με API...")
-        response = requests.post("https://localhost:9876/api/admin/resetpoints", timeout=5)
+        response = requests.post("http://localhost:9876/api/admin/resetpoints", timeout=5)
         
         if response.status_code == 200:
             print("Επιτυχής επαναφορά!")
@@ -569,7 +569,7 @@ def pointstatus_command(point_id, date_from, date_to, format_type='json'):
     
     try:
         print("Προσπάθεια σύνδεσης με API...")
-        url = f"https://localhost:9876/api/pointstatus/{point_id}/{date_from}/{date_to}"
+        url = f"http://localhost:9876/api/pointstatus/{point_id}/{date_from}/{date_to}"
         params = {}
         if format_type:
             params['format'] = format_type
@@ -609,9 +609,9 @@ def reserve_command(point_id, minutes=None):
         
         # Κατασκευή URL σύμφωνα με προδιαγραφές
         if minutes:
-            url = f"https://localhost:9876/api/reserve/{point_id}/{minutes}"
+            url = f"http://localhost:9876/api/reserve/{point_id}/{minutes}"
         else:
-            url = f"https://localhost:9876/api/reserve/{point_id}"
+            url = f"http://localhost:9876/api/reserve/{point_id}"
         
         response = requests.post(url, timeout=5)
         
@@ -640,7 +640,7 @@ def sessions_command(point_id, date_from, date_to, format_type='json'):
     
     try:
         print("Προσπάθεια σύνδεσης με API...")
-        url = f"https://localhost:9876/api/sessions/{point_id}/{date_from}/{date_to}"
+        url = f"http://localhost:9876/api/sessions/{point_id}/{date_from}/{date_to}"
         params = {}
         if format_type:
             params['format'] = format_type
@@ -693,7 +693,7 @@ def newsession_command(point_id, starttime, endtime, startsoc, endsoc,
         }
         
         # Αποστολή στο API
-        url = "https://localhost:9876/api/newsession"
+        url = "http://localhost:9876/api/newsession"
         response = requests.post(url, json=session_data, timeout=5)
         
         if response.status_code == 200:
@@ -767,7 +767,7 @@ def main():
     # Υποχρεωτική παράμετρος --id
     updpoint_parser.add_argument('--id',
                                required=True,
-                               type=str,
+                               type=int,
                                help='ID του φορτιστή (required)')
     
     # Προαιρετικές παράμετροι (τουλάχιστον μία πρέπει να δοθεί)

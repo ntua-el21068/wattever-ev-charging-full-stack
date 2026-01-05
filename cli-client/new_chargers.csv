@@ -1,0 +1,4 @@
+station_id,charger_id,name,address,latitude,longitude,connector_type,max_power_kw
+ST_TEST_01,pyth,Test Station Alpha,Athens Center,37.9838,23.7275,Type 2,22.0
+ST_TEST_01,CH_TEST_02,Test Station Alpha,Athens Center,37.9838,23.7275,CCS,50.0
+ST_TEST_02,CH_TEST_03,Test Station Beta,Kifisia,38.0742,23.8243,CHAdeMO,50.0

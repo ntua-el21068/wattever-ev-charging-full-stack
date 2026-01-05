@@ -42,7 +42,6 @@ source database/schema.sql;
 4. Εκτέλεση του Server
 Για να ξεκινήσετε το API, μπείτε στον φάκελο 'api' και τρέξτε την εντολή:
 
-cd api
 python3 -m uvicorn main:app --host 0.0.0.0 --port 9876 --reload
 
 Ο server θα είναι πλέον διαθέσιμος στη διεύθυνση: http://localhost:9876

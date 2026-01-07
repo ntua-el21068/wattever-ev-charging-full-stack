@@ -1,22 +1,19 @@
+// src/pages/MapPage.jsx
 import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import axios from 'axios';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-
-// --- Διόρθωση εικονιδίων Leaflet (Standard fix για React) ---
 import iconMarker from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+import { useNavigate } from 'react-router-dom'; // Χρησιμοποιούμε useNavigate για να αλλάξουμε σελίδα προγραμματιστικά
 
-// Συνάρτηση που επιστρέφει το εικονίδιο ανάλογα με το Status (SRS R2.1)
 const getIcon = (status) => {
-    let className = 'marker-default'; // Μπλε
-    
-    // Χρωματική κωδικοποίηση (SRS: Πράσινο=Available, Γκρι=Unavailable)
-    if (status === 'AVAILABLE') className = 'marker-green';
-    else if (status === 'RESERVED') className = 'marker-red';
-    else if (status === 'CHARGING') className = 'marker-orange';
-    else className = 'marker-gray';
+    // Η λογική χρωμάτων της φίλης σου
+    let hue = 0; 
+    if (status === 'AVAILABLE') hue = 260; // Greenish (hue-rotate)
+    if (status === 'RESERVED') hue = 0;    // Original Blue turned Reddish via CSS logic in index.css? 
+    // Σημείωση: Στο index.css έχουμε βάλει κλάσεις .marker-AVAILABLE κλπ, οπότε θα παίξει από εκεί.
 
     return new L.Icon({
         iconUrl: iconMarker,
@@ -24,64 +21,62 @@ const getIcon = (status) => {
         iconSize: [25, 41],
         iconAnchor: [12, 41],
         popupAnchor: [1, -34],
-        className: className 
+        className: `marker-${status}` // Αυτό παίρνει χρώμα από το src/index.css
     });
 };
 
-const MapPage = () => {
+export default function MapPage() {
   const [points, setPoints] = useState([]);
-  const [filterStatus, setFilterStatus] = useState(''); 
   const [reserveMinutes, setReserveMinutes] = useState(30);
+  const navigate = useNavigate(); // Για να σε πηγαίνουμε στη σελίδα φόρτισης
 
-  // --- 1. FETCH POINTS (SRS R2.1) ---
+  // 1. Fetch Points (Ακριβώς όπως της φίλης σου)
   const fetchPoints = async () => {
     try {
-      let url = 'http://localhost:8000/api/points';
-      if (filterStatus) {
-        url += `?status=${filterStatus}`;
-      }
-      const response = await axios.get(url);
+      const response = await axios.get('http://localhost:9876/api/points');
       setPoints(response.data);
     } catch (error) {
       console.error("Error fetching points:", error);
+      // Εδώ δεν βάζω mock data για να δεις ακριβώς τι επιστρέφει ο server
     }
   };
 
   useEffect(() => {
     fetchPoints();
-    // Προαιρετικά: Auto-refresh κάθε 10 δευτερόλεπτα για Live updates
-    const interval = setInterval(fetchPoints, 10000);
-    return () => clearInterval(interval);
-  }, [filterStatus]);
+  }, []);
 
-  // --- 2. ΛΕΙΤΟΥΡΓΙΑ ΚΡΑΤΗΣΗΣ (Use Case 1 / SRS R3) ---
+  // 2. Handle Reserve
   const handleReserve = async (pointId) => {
     try {
-      const res = await axios.post(`http://localhost:8000/api/reserve/${pointId}/${reserveMinutes}`);
-      alert(`Επιτυχία! Κράτηση μέχρι: ${res.data.reservationendtime}`);
-      fetchPoints(); // Ανανέωση χάρτη
+      await axios.post(`http://localhost:9876/api/reserve/${pointId}/${reserveMinutes}`);
+      alert("Επιτυχία! Ο φορτιστής δεσμεύτηκε.");
+      fetchPoints(); 
     } catch (err) {
       alert("Σφάλμα κράτησης: " + (err.response?.data?.detail || err.message));
     }
   };
 
-  // --- 3. ΛΕΙΤΟΥΡΓΙΑ ΕΝΑΡΞΗΣ ΦΟΡΤΙΣΗΣ (Use Case 2 / SRS R4) ---
+  // 3. Handle Start Charging (Εδώ έκανα μια μικρή βελτίωση: σε πάει στη σελίδα Charging)
   const handleStartCharging = async (pointId) => {
-    try {
-        // Υποθέτουμε Vehicle ID 'VEH_001' (Hardcoded για το demo)
-        await axios.post(`http://localhost:8000/api/start_charging/${pointId}/VEH_001`);
-        alert("Η φόρτιση ξεκίνησε! ⚡");
-        fetchPoints();
-    } catch (err) {
-        alert("Αδυναμία έναρξης: " + (err.response?.data?.detail || err.message));
-    }
+      try {
+          // Καλεί το API της φίλης σου
+          await axios.post(`http://localhost:9876/api/start_charging/${pointId}/VEH_001`);
+          alert("Η φόρτιση ξεκίνησε!");
+          fetchPoints();
+          
+          // ΣΕ ΠΑΕΙ ΣΤΗΝ ΟΘΟΝΗ ΦΟΡΤΙΣΗΣ ΠΟΥ ΦΤΙΑΞΑΜΕ
+          navigate(`/charging/${pointId}`);
+          
+      } catch (err) {
+          alert("Σφάλμα εκκίνησης: " + (err.response?.data?.detail || err.message));
+      }
   };
 
-  // --- 4. ΛΕΙΤΟΥΡΓΙΑ ΤΕΡΜΑΤΙΣΜΟΥ (Use Case 2 / SRS R4) ---
+  // 4. Handle Stop Charging
   const handleStopCharging = async (pointId) => {
       try {
-          const res = await axios.post(`http://localhost:8000/api/stop_charging/${pointId}`);
-          alert(`Φόρτιση ολοκληρώθηκε!\nΣύνολο kWh: ${res.data.kwh}\nΚόστος: ${res.data.cost}€`);
+          const res = await axios.post(`http://localhost:9876/api/stop_charging/${pointId}`);
+          alert(`Η φόρτιση ολοκληρώθηκε! Κόστος: ${res.data.cost}€, Ενέργεια: ${res.data.kwh} kWh`);
           fetchPoints();
       } catch (err) {
           alert("Σφάλμα τερματισμού: " + (err.response?.data?.detail || err.message));
@@ -89,116 +84,101 @@ const MapPage = () => {
   };
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      
-      {/* HEADER & FILTERS (SRS R2.2) */}
-      <header style={{ padding: '15px', background: '#2c3e50', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ margin: 0 }}>🔌 WATTever Map</h2>
-        
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <label>Κατάσταση:</label>
-          <select 
-            value={filterStatus} 
-            onChange={(e) => setFilterStatus(e.target.value)}
-            style={{ padding: '8px', borderRadius: '4px' }}
+    <div className="h-full w-full">
+      <MapContainer center={[37.9838, 23.7275]} zoom={12} style={{ height: '100%', width: '100%' }}>
+        <TileLayer
+          attribution='&copy; OpenStreetMap contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+
+        {points.map((point) => (
+          <Marker 
+            key={point.pointid} 
+            position={[point.lat, point.lon]}
+            icon={getIcon(point.status)}
           >
-            <option value="">Όλα</option>
-            <option value="available">Διαθέσιμα (Πράσινα)</option>
-            <option value="reserved">Κρατημένα (Κόκκινα)</option>
-            <option value="charging">Φορτίζουν (Πορτοκαλί)</option>
-          </select>
-          <button onClick={fetchPoints} style={{ padding: '8px', cursor: 'pointer' }}>Refresh</button>
-        </div>
-      </header>
-
-      {/* MAP CONTAINER */}
-      <div style={{ flex: 1 }}>
-        <MapContainer center={[37.9838, 23.7275]} zoom={13} style={{ height: '100%', width: '100%' }}>
-          <TileLayer
-            attribution='&copy; OpenStreetMap contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-
-          {points.map((point) => (
-            <Marker 
-              key={point.pointid} 
-              position={[point.lat, point.lon]}
-              icon={getIcon(point.status)}
-            >
-              <Popup>
-                <div style={{ minWidth: '200px', textAlign: 'center' }}>
-                  <h3 style={{ margin: '5px 0' }}>{point.pointid}</h3>
-                  <p>Status: <strong>{point.status}</strong></p>
-                  <p>Τιμή: <strong>{point.kwhprice} €/kWh</strong></p>
-                  <hr />
-
-                  {/* UI LOGIC: Τι κουμπιά δείχνουμε ανάλογα με το Status */}
-                  
-                  {/* ΠΕΡΙΠΤΩΣΗ 1: ΔΙΑΘΕΣΙΜΟΣ -> ΔΕΙΞΕ ΚΡΑΤΗΣΗ */}
-                  {point.status === 'AVAILABLE' && (
-                    <div>
-                      <p style={{ fontSize: '0.9em' }}>Επιλογή χρόνου κράτησης:</p>
-                      <div style={{ display: 'flex', justifyContent: 'center', gap: '5px', marginBottom: '10px' }}>
-                        {[15, 30, 45].map(min => (
-                           <button 
-                             key={min}
-                             onClick={() => setReserveMinutes(min)}
-                             style={{ 
-                               background: reserveMinutes === min ? '#3498db' : '#ecf0f1',
-                               color: reserveMinutes === min ? 'white' : 'black',
-                               border: '1px solid #ccc', cursor: 'pointer', padding: '5px'
-                             }}
-                           >
-                             {min}'
-                           </button>
-                        ))}
-                      </div>
-                      <button 
-                        onClick={() => handleReserve(point.pointid)}
-                        style={{ width: '100%', background: '#27ae60', color: 'white', padding: '10px', border: 'none', cursor: 'pointer', borderRadius: '5px' }}
-                      >
-                        Δέσμευση
-                      </button>
-                    </div>
-                  )}
-
-                  {/* ΠΕΡΙΠΤΩΣΗ 2: ΚΡΑΤΗΜΕΝΟΣ -> ΔΕΙΞΕ ΕΝΑΡΞΗ (Υποθέτουμε ότι είμαστε ο χρήστης που έκανε την κράτηση) */}
-                  {point.status === 'RESERVED' && (
-                      <button 
-                        onClick={() => handleStartCharging(point.pointid)}
-                        style={{ width: '100%', background: '#2980b9', color: 'white', padding: '10px', border: 'none', cursor: 'pointer', borderRadius: '5px' }}
-                      >
-                        🚙 Άφιξη & Έναρξη Φόρτισης
-                      </button>
-                  )}
-
-                  {/* ΠΕΡΙΠΤΩΣΗ 3: ΦΟΡΤΙΖΕΙ -> ΔΕΙΞΕ ΤΕΡΜΑΤΙΣΜΟ */}
-                  {point.status === 'CHARGING' && (
-                      <div style={{ background: '#f39c12', padding: '10px', borderRadius: '5px', color: 'white' }}>
-                        <h4>⚡ Φόρτιση σε εξέλιξη...</h4>
-                        <div className="pulse">...</div>
-                        <button 
-                          onClick={() => handleStopCharging(point.pointid)}
-                          style={{ width: '100%', background: '#c0392b', color: 'white', padding: '10px', marginTop: '10px', border: 'none', cursor: 'pointer', borderRadius: '5px' }}
-                        >
-                          Τερματισμός (Stop)
-                        </button>
-                      </div>
-                  )}
-
-                  {/* ΠΕΡΙΠΤΩΣΗ 4: ΕΚΤΟΣ ΛΕΙΤΟΥΡΓΙΑΣ */}
-                  {(point.status === 'OUTOFORDER' || point.status === 'OFFLINE') && (
-                      <p style={{ color: 'red', fontWeight: 'bold' }}>ΜΗ ΔΙΑΘΕΣΙΜΟΣ</p>
-                  )}
-
+            <Popup>
+              <div style={{ minWidth: '200px', fontFamily: 'Arial, sans-serif' }}>
+                <h3 className="font-bold text-lg mb-2 text-[#2c3e50]">Φορτιστής #{point.pointid}</h3>
+                
+                <div className="mb-3">
+                  <strong>Κατάσταση: </strong> 
+                  <span className={`font-bold ${
+                      point.status === 'AVAILABLE' ? 'text-green-600' : 
+                      point.status === 'RESERVED' ? 'text-orange-500' : 
+                      'text-red-600'
+                  }`}>
+                      {point.status}
+                  </span>
+                  <br/>
+                  <strong>Τιμή:</strong> {point.kwhprice} €/kWh
                 </div>
-              </Popup>
-            </Marker>
-          ))}
-        </MapContainer>
-      </div>
+
+                {/* Κουμπιά (Ακριβώς η λογική της φίλης σου) */}
+                
+                {point.status === 'AVAILABLE' && (
+                  <div className="bg-gray-100 p-2 rounded">
+                      <label className="text-sm">Διάρκεια Κράτησης:</label>
+                      <div className="flex gap-1 my-2">
+                          {[15, 30].map(m => (
+                              <button 
+                                  key={m} 
+                                  onClick={() => setReserveMinutes(m)}
+                                  className={`flex-1 p-1 text-sm border rounded ${
+                                      reserveMinutes === m ? 'bg-[#2c3e50] text-white' : 'bg-white text-black'
+                                  }`}
+                              >
+                                  {m}'
+                              </button>
+                          ))}
+                      </div>
+                      <button 
+                          onClick={() => handleReserve(point.pointid)}
+                          className="w-full bg-green-600 text-white p-2 rounded font-bold hover:bg-green-700"
+                      >
+                          Δέσμευση
+                      </button>
+                  </div>
+                )}
+
+                {point.status === 'RESERVED' && (
+                    <div className="bg-orange-50 p-2 rounded border border-orange-200">
+                        <p className="text-sm mb-2">Φτάσατε στον φορτιστή;</p>
+                        <button 
+                            onClick={() => handleStartCharging(point.pointid)}
+                            className="w-full bg-blue-600 text-white p-2 rounded font-bold hover:bg-blue-700"
+                        >
+                            🔌 Σύνδεση & Έναρξη
+                        </button>
+                    </div>
+                )}
+
+                {point.status === 'CHARGING' && (
+                    <div className="bg-blue-50 p-2 rounded border border-blue-200 text-center">
+                        <div className="text-xl animate-pulse">⚡</div>
+                        <strong>Φόρτιση σε εξέλιξη...</strong>
+                        <button 
+                            onClick={() => handleStopCharging(point.pointid)}
+                            className="w-full bg-red-600 text-white p-2 rounded font-bold mt-2 hover:bg-red-700"
+                        >
+                            Τερματισμός
+                        </button>
+                        
+                        {/* Κουμπί για να δεις την ωραία οθόνη που φτιάξαμε */}
+                        <button
+                             onClick={() => navigate(`/charging/${point.pointid}`)}
+                             className="w-full mt-2 text-xs text-blue-600 underline"
+                        >
+                            Προβολή Οθόνης Φόρτισης
+                        </button>
+                    </div>
+                )}
+
+              </div>
+            </Popup>
+          </Marker>
+        ))}
+      </MapContainer>
     </div>
   );
-};
-
-export default MapPage;
+}

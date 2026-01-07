@@ -1,1 +1,17 @@
-body { margin: 0; padding: 0; }
+@import "tailwindcss";
+
+@config "../tailwind.config.js";
+
+/* Ρύθμιση για να πιάνει η εφαρμογή όλη την οθόνη */
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* Χρώματα για τις πινέζες (από τον κώδικα της φίλης σου) */
+.marker-AVAILABLE { filter: hue-rotate(260deg) saturate(3) brightness(1.2); }
+.marker-RESERVED { filter: hue-rotate(140deg) saturate(3); }
+.marker-CHARGING { filter: hue-rotate(170deg) saturate(5) brightness(1.1); }
+.marker-OFFLINE { filter: grayscale(100%); }

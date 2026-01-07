@@ -17,17 +17,16 @@ const DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
-// --- Συνάρτηση για χρωματισμό πινέζας ---
+// --- Συνάρτηση για χρωματισμό πινέζας (Self-contained) ---
 const getIcon = (status) => {
     let filter = "";
-    // AVAILABLE -> Πράσινο
-    if (status === 'AVAILABLE') filter = "hue-rotate(140deg) brightness(1.2)"; 
-    // CHARGING -> Μπλε
-    else if (status === 'CHARGING') filter = "hue-rotate(200deg) brightness(1.5)"; 
-    // RESERVED -> Πορτοκαλί (Κρατημένο)
-    else if (status === 'RESERVED') filter = "hue-rotate(30deg) saturate(3)"; 
-    // Άλλο -> Γκρι
-    else filter = "grayscale(100%) brightness(0.5)"; 
+    // Λαμβάνουμε υπόψη και τα μικρά και τα κεφαλαία γράμματα για ασφάλεια
+    const s = status ? status.toUpperCase() : "";
+
+    if (s === 'AVAILABLE') filter = "hue-rotate(140deg) brightness(1.2)"; // Πράσινο
+    else if (s === 'CHARGING') filter = "hue-rotate(200deg) brightness(1.5)"; // Μπλε
+    else if (s === 'RESERVED') filter = "hue-rotate(30deg) saturate(3)"; // Πορτοκαλί
+    else filter = "grayscale(100%) brightness(0.5)"; // Γκρι
 
     return L.divIcon({
         className: 'custom-marker',
@@ -54,13 +53,11 @@ export default function MapPage() {
 
   useEffect(() => {
     fetchPoints();
-    // Ανανέωση κάθε 10 δευτερόλεπτα για να βλέπουμε αλλαγές status
-    const interval = setInterval(fetchPoints, 10000); 
-    return () => clearInterval(interval);
+    // Χωρίς setInterval για να μην αναβοσβήνει
   }, []);
 
   return (
-    <div className="h-full w-full relative z-0"> {/* z-0 για να μην καλύπτει το Navbar */}
+    <div className="h-full w-full relative z-0"> 
       <MapContainer center={[37.9838, 23.7275]} zoom={13} style={{ height: '100%', width: '100%' }}>
         <TileLayer
           attribution='&copy; OpenStreetMap contributors'
@@ -70,6 +67,7 @@ export default function MapPage() {
         {points.map((point) => (
           <Marker 
             key={point.pointid} 
+            // ΠΡΟΣΟΧΗ: Εδώ είναι το μυστικό! parseFloat γιατί η βάση στέλνει strings
             position={[parseFloat(point.lat), parseFloat(point.lon)]}
             icon={getIcon(point.status)}
           >
@@ -81,21 +79,21 @@ export default function MapPage() {
                 <div className="mb-3">
                   <strong>Κατάσταση: </strong> 
                   <span className={`font-bold ${
-                      point.status === 'available' || point.status === 'AVAILABLE' ? 'text-green-600' : 
-                      point.status === 'reserved' || point.status === 'RESERVED' ? 'text-orange-500' : 
-                      point.status === 'charging' || point.status === 'CHARGING' ? 'text-blue-600' :
+                      (point.status || '').toUpperCase() === 'AVAILABLE' ? 'text-green-600' : 
+                      (point.status || '').toUpperCase() === 'RESERVED' ? 'text-orange-500' : 
+                      (point.status || '').toUpperCase() === 'CHARGING' ? 'text-blue-600' :
                       'text-red-600'
                   }`}>
-                      {point.status.toUpperCase()}
+                      {(point.status || 'UNKNOWN').toUpperCase()}
                   </span>
                   <br/>
                   <strong>Ισχύς:</strong> {point.cap} kW
                 </div>
 
-                {/* --- ΚΟΥΜΠΙΑ --- */}
+                {/* --- ΚΟΥΜΠΙΑ ΠΛΟΗΓΗΣΗΣ --- */}
                 
-                {/* 1. ΑΝ ΕΙΝΑΙ ΔΙΑΘΕΣΙΜΟΣ -> Πάμε στη σελίδα Κράτησης */}
-                {(point.status === 'AVAILABLE' || point.status === 'available') && (
+                {/* 1. AVAILABLE -> Σελίδα Κράτησης */}
+                {(point.status || '').toUpperCase() === 'AVAILABLE' && (
                   <button 
                       onClick={() => navigate(`/reserve/${point.pointid}`)}
                       className="w-full bg-green-600 text-white p-2 rounded font-bold hover:bg-green-700 shadow-sm mt-2"
@@ -104,8 +102,8 @@ export default function MapPage() {
                   </button>
                 )}
 
-                {/* 2. ΑΝ ΕΙΝΑΙ KPATHMENOΣ -> Πάμε στη σελίδα Φόρτισης (Για Έναρξη) */}
-                {(point.status === 'RESERVED' || point.status === 'reserved') && (
+                {/* 2. RESERVED -> Σελίδα Φόρτισης (Έναρξη) */}
+                {(point.status || '').toUpperCase() === 'RESERVED' && (
                     <div className="bg-orange-50 p-2 rounded border border-orange-200 mt-2">
                         <p className="text-xs mb-2 text-center text-orange-800">Η θέση είναι κρατημένη.</p>
                         <button 
@@ -117,8 +115,8 @@ export default function MapPage() {
                     </div>
                 )}
 
-                {/* 3. ΑΝ ΦΟΡΤΙΖΕΙ -> Πάμε στη σελίδα Φόρτισης (Για Επίβλεψη/Τερματισμό) */}
-                {(point.status === 'CHARGING' || point.status === 'charging') && (
+                {/* 3. CHARGING -> Σελίδα Φόρτισης (Επίβλεψη) */}
+                {(point.status || '').toUpperCase() === 'CHARGING' && (
                     <button 
                         onClick={() => navigate(`/charging/${point.pointid}`)}
                         className="w-full bg-blue-500 text-white p-2 rounded font-bold animate-pulse mt-2"

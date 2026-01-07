@@ -1,16 +1,42 @@
-# React + Vite
+# WATTever - Frontend App
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Αυτό είναι το Frontend της εφαρμογής φόρτισης, χτισμένο με React, Vite, Tailwind CSS και HeroUI.
 
-Currently, two official plugins are available:
+## Πως να ξεκινήσετε (SOS)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Πριν γράψετε κώδικα, πρέπει να κατεβάσετε τις βιβλιοθήκες στον υπολογιστή σας:
 
-## React Compiler
+1. Ανοίξτε τερματικό σε αυτόν τον φάκελο (front-end).
+2. Τρέξτε την εντολή:
+   npm install
+   (Αυτό θα πάρει λίγη ώρα και θα δημιουργήσει τον φάκελο node_modules. ΜΗΝ τον ανεβάσετε στο git).
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+3. Για να ξεκινήσει η εφαρμογή:
+   npm run dev
+   Κλικάρετε το link που θα εμφανιστεί (συνήθως http://localhost:5173).
 
-## Expanding the ESLint configuration
+## Δομη Φακελων (Που δουλευει ο καθενας)
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Για να μην μπερδευόμαστε, δουλεύουμε στους εξής φακέλους μέσα στο src/:
+
+* src/pages/: Εδώ βρίσκονται οι οθόνες.
+    * MapPage.jsx -> Μέλος Α (Χάρτης & Pins)
+    * ReservationPage.jsx -> Μέλος Β (Δέσμευση)
+    * ChargingPage.jsx -> Μέλος Γ (Φόρτιση & Timer)
+* src/components/: Κοινά κομμάτια (π.χ. Navbar, Κουμπιά που χρησιμοποιούμε παντού).
+* src/services/: Εδώ είναι το api.js για να μιλάμε με το Backend.
+* src/assets/: Εδώ βάζουμε εικόνες/λογότυπα.
+
+## Χρησιμα Links & Documentation
+
+Χρησιμοποιούμε HeroUI (πρώην NextUI) για τα components. Μην γράφετε CSS με το χέρι αν δεν χρειάζεται!
+
+* Κουμπιά & Inputs: https://www.heroui.com/docs/components/button
+* Χρώματα & Στυλ (Tailwind): https://nerdcave.com/tailwind-cheat-sheet
+* Εικονίδια: https://heroicons.com/
+
+## Κανονες Git
+
+1. Ποτέ δεν πειράζουμε τον κώδικα του άλλου στο src/pages.
+2. Πριν κάνετε Push, κάντε πάντα git pull για να πάρετε τις αλλαγές των άλλων.
+3. Αν φτιάξετε νέο component που είναι χρήσιμο (π.χ. ChargerCard), βάλτε το στο src/components.

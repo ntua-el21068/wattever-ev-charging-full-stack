@@ -33,7 +33,7 @@ function App() {
   );
 }
 
-export default App;
+
 
 import MapPage from './MapPage';
 

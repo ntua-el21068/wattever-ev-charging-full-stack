@@ -8,8 +8,24 @@ from fastapi.responses import JSONResponse
 from utils import create_error_log 
 from typing import Optional
 from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="WATTever API")
+
+origins = [
+    "http://localhost:5173",  
+    "http://127.0.0.1:5173",    
+    "*"                         
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],  
+    allow_headers=["*"],
+)
+
 API_PREFIX = "/api"
 
 # --- ΡΥΘΜΙΣΕΙΣ ΒΑΣΗΣ ΔΕΔΟΜΕΝΩΝ ---
@@ -300,23 +316,25 @@ async def get_points(request: Request, status: str = None, format: str = "json")
         
     return data
 
-# --- 5. /point/{id} ---
+# --- 5. /point/{id} (ΔΙΟΡΘΩΜΕΝΟ: Spec Compliant + UI Data) ---
 @app.get(API_PREFIX + "/point/{point_id}")
 async def get_point_details(request: Request, point_id: str):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     
-    # Κάνουμε JOIN και με τον πίνακα Reservation για να δούμε αν υπάρχει ενεργή κράτηση
-    # Ψάχνουμε κράτηση που είναι 'ACTIVE' και δεν έχει λήξει ακόμα (expiration_time > NOW())
+    # ΠΡΟΣΟΧΗ: Προσθέσαμε ξανά τα lat/lon που απαιτεί η εκφώνηση
     query = """
         SELECT 
             c.charger_id as pointid,
-            s.latitude as lat,
-            s.longtitude as lon,
-            c.status,
-            c.max_power_kw as cap,
-            pp.fixed_price_kwh as kwhprice,
-            r.expiration_time as reservationendtime
+            s.latitude as lat,           -- ΥΠΟΧΡΕΩΤΙΚΟ (Spec)
+            s.longtitude as lon,         -- ΥΠΟΧΡΕΩΤΙΚΟ (Spec)
+            c.status,                    -- ΥΠΟΧΡΕΩΤΙΚΟ (Spec)
+            c.max_power_kw as cap,       -- ΥΠΟΧΡΕΩΤΙΚΟ (Spec)
+            pp.fixed_price_kwh as kwhprice, -- ΥΠΟΧΡΕΩΤΙΚΟ (Spec)
+            r.expiration_time as reservationendtime, -- ΥΠΟΧΡΕΩΤΙΚΟ (Spec)
+            
+            s.name as station_name,      -- Extra για το UI (Frontend)
+            s.address as station_address -- Extra για το UI (Frontend)
         FROM Charger c
         JOIN Station s ON c.station_id = s.station_id
         JOIN PricingPolicy pp ON c.policy_id = pp.policy_id
@@ -332,10 +350,15 @@ async def get_point_details(request: Request, point_id: str):
     if not point:
         return JSONResponse(status_code=404, content=create_error_log(request, 404, "Point not found"))
     
-    # Μετατροπή της ημερομηνίας σε string για να μην χτυπήσει το JSON
+    # Η εκφώνηση απαιτεί string format για το timestamp
     if point["reservationendtime"]:
         point["reservationendtime"] = point["reservationendtime"].strftime("%Y-%m-%d %H:%M")
     
+    # Μετατροπή Decimal σε float/string αν χρειάζεται (η JSONResponse το κάνει αυτόματα συνήθως, 
+    # αλλά η εκφώνηση λέει lat/lon string. Αν η βάση τα έχει Decimal, ίσως χρειαστεί str())
+    point['lat'] = str(point['lat'])
+    point['lon'] = str(point['lon'])
+
     return point
 
 # --- 6. /reserve/{id} ---
@@ -606,6 +629,104 @@ async def get_point_status(request: Request, point_id: str, date_from: str, date
         return Response(content=output.getvalue(), media_type="text/csv")
 
     return results
+
+# --- 12. ΕΝΑΡΞΗ ΦΟΡΤΙΣΗΣ (Start Charging) ---
+@app.post(API_PREFIX + "/charge/start/{point_id}/{vehicle_id}")
+async def start_charging_process(request: Request, point_id: str, vehicle_id: str):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # 1. Έλεγχος: Είναι ο φορτιστής RESERVED ή AVAILABLE;
+    cursor.execute("SELECT status, policy_id FROM Charger WHERE charger_id = %s", (point_id,))
+    charger = cursor.fetchone()
+    
+    if not charger or charger['status'] not in ['AVAILABLE', 'RESERVED']:
+        conn.close()
+        return JSONResponse(status_code=400, content=create_error_log(request, 400, "Charger not ready"))
+
+    # 2. Αλλαγή Status σε CHARGING
+    cursor.execute("UPDATE Charger SET status = 'CHARGING' WHERE charger_id = %s", (point_id,))
+    
+    # 3. Δημιουργία Session (IN_PROGRESS)
+    # Βρίσκουμε την τιμή χρέωσης
+    cursor.execute("SELECT fixed_price_kwh FROM PricingPolicy WHERE policy_id = %s", (charger['policy_id'],))
+    policy = cursor.fetchone()
+    price = policy['fixed_price_kwh']
+
+    session_id = f"SESS_{point_id}_{int(datetime.now().timestamp())}"
+    
+    cursor.execute("""
+        INSERT INTO ChargingSession 
+        (session_id, start_time, cost_per_kwh, start_soc, status, user_id, charger_id, vehicle_id)
+        VALUES (%s, NOW(), %s, 20, 'IN_PROGRESS', 'USR_001', %s, %s)
+    """, (session_id, price, point_id, vehicle_id))
+    
+    # (Προαιρετικά: Ενημερώνουμε και το Reservation να γίνει COMPLETED αν υπήρχε)
+    cursor.execute("UPDATE Reservation SET status = 'COMPLETED' WHERE charger_id = %s AND status = 'ACTIVE'", (point_id,))
+
+    conn.commit()
+    conn.close()
+    
+    return {"status": "started", "session_id": session_id}
+
+
+# --- 13. ΤΕΡΜΑΤΙΣΜΟΣ ΦΟΡΤΙΣΗΣ (Stop Charging) ---
+@app.post(API_PREFIX + "/charge/stop/{point_id}")
+async def stop_charging_process(request: Request, point_id: str):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # 1. Βρες το ενεργό Session
+    cursor.execute("""
+        SELECT * FROM ChargingSession 
+        WHERE charger_id = %s AND status = 'IN_PROGRESS' 
+        ORDER BY start_time DESC LIMIT 1
+    """, (point_id,))
+    session = cursor.fetchone()
+    
+    if not session:
+        conn.close()
+        return JSONResponse(status_code=400, content=create_error_log(request, 400, "No active session found"))
+
+    # 2. Υπολογισμοί (Προσομοίωση)
+    # Στην πραγματικότητα αυτά θα τα έδινε ο φορτιστής. Εδώ τα υπολογίζουμε βάσει χρόνου.
+    start_time = session['start_time']
+    end_time = datetime.now()
+    duration_minutes = (end_time - start_time).total_seconds() / 60
+    
+    # Ας υποθέσουμε ότι φορτίζει με 22kW (0.36 kWh ανά λεπτό)
+    kwh_consumed = round(duration_minutes * 0.36, 3) 
+    if kwh_consumed < 0.1: kwh_consumed = 0.1 # Ελάχιστη χρέωση
+
+    cost = round(kwh_consumed * float(session['cost_per_kwh']), 2)
+
+    # 3. Update Session (FINISHED)
+    cursor.execute("""
+        UPDATE ChargingSession 
+        SET charging_end_time = %s, session_end_time = %s, 
+            total_kwh = %s, total_cost = %s, end_soc = 80, status = 'FINISHED'
+        WHERE session_id = %s
+    """, (end_time, end_time, kwh_consumed, cost, session['session_id']))
+
+    # 4. Create Transaction
+    trans_id = f"TRX_{session['session_id']}"
+    cursor.execute("""
+        INSERT INTO Transaction (transaction_id, amount, type, status, session_id)
+        VALUES (%s, %s, 'Card', 'Success', %s)
+    """, (trans_id, cost, session['session_id']))
+
+    # 5. Ελευθέρωση Φορτιστή
+    cursor.execute("UPDATE Charger SET status = 'AVAILABLE' WHERE charger_id = %s", (point_id,))
+
+    conn.commit()
+    conn.close()
+
+    return {
+        "status": "finished",
+        "kwh": kwh_consumed,
+        "cost": cost,
+        "duration_min": round(duration_minutes, 1)
+    }
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):

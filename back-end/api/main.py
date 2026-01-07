@@ -34,7 +34,7 @@ class UpdatePointInput(BaseModel):
     kwhprice: Optional[float] = None
 
 class SessionData(BaseModel):
-    pointid: str
+    id: str
     starttime: str
     endtime: str
     startsoc: int
@@ -44,7 +44,7 @@ class SessionData(BaseModel):
     amount: float
 
 class SessionInput(BaseModel):
-    pointid: str
+    id: str
     starttime: str
     endtime: str
     startsoc: int
@@ -249,47 +249,54 @@ async def add_points(file: UploadFile = File(...)):
         "stations_created": stations_added
     }
 
-# --- 4. /points (ΑΝΑΖΗΤΗΣΗ ΣΗΜΕΙΩΝ) ---
+# --- 4. /points (Λίστα σημείων φόρτισης - Section a) ---
 @app.get(f"{API_PREFIX}/points")
 async def get_points(request: Request, status: str = None, format: str = "json"):
     conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True) # Επιστρέφει dict αντί για tuple
+    cursor = conn.cursor(dictionary=True)
     
+    # Έλεγχος εγκυρότητας status
+    # Η εκφώνηση λέει: "401 μαζί με αντικείμενο error log, αν το ζητούμενο status δεν περιλαμβάνεται"
+    if status:
+        valid_statuses = ["available", "charging", "reserved", "outoforder", "offline"]
+        if status.lower() not in valid_statuses:
+            conn.close()
+            # ΠΡΟΣΟΧΗ: Η εκφώνηση ζητάει 401 εδώ, όχι 400
+            return JSONResponse(status_code=401, content=create_error_log(request, 401, "Invalid status argument"))
+
+    # Το Query ακριβώς όπως το ζητάει η εκφώνηση (χωρίς kwhprice)
     query = """
         SELECT 
+            'WATTever' as providerName,
             c.charger_id as pointid,
-            s.latitude as lat,
             s.longtitude as lon,
+            s.latitude as lat,
             c.status,
-            c.max_power_kw as cap,
-            pp.fixed_price_kwh as kwhprice,
-            'WATTever' as providerName
+            ROUND(c.max_power_kw) as cap  
         FROM Charger c
         JOIN Station s ON c.station_id = s.station_id
-        JOIN PricingPolicy pp ON c.policy_id = pp.policy_id
     """
+    # Σημείωση: Το ROUND(cap) το έβαλα επειδή ζητάει Integer, ενώ στη βάση είναι Decimal.
     
     params = []
     if status:
-        valid = ["available", "charging", "reserved", "outoforder", "offline"]
-        if status.lower() not in valid:
-            conn.close()
-            return JSONResponse(status_code=400, content=create_error_log(request, 400, "Invalid status"))
-        
         query += " WHERE c.status = %s"
-        params.append(status.upper()) # Η βάση έχει κεφαλαία συνήθως ή case-insensitive
+        params.append(status.upper())
     
     cursor.execute(query, params)
     data = cursor.fetchall()
     conn.close()
     
+    # Διαχείριση CSV format
     if format == "csv":
         output = io.StringIO()
         if data:
+            # Η εκφώνηση λέει delimiter ",". 
+            # Ο csv.DictWriter το κάνει αυτόματα.
             writer = csv.DictWriter(output, fieldnames=data[0].keys(), delimiter=',')
             writer.writeheader()
             writer.writerows(data)
-        return Response(content=output.getvalue().replace(',', ', '), media_type="text/csv")
+        return Response(content=output.getvalue(), media_type="text/csv")
         
     return data
 
@@ -469,13 +476,13 @@ async def new_session(request: Request, input_data: SessionInput):
     cursor = conn.cursor()
     
     # 1. Έλεγχος αν υπάρχει ο φορτιστής
-    cursor.execute("SELECT charger_id FROM Charger WHERE charger_id = %s", (input_data.pointid,))
+    cursor.execute("SELECT charger_id FROM Charger WHERE charger_id = %s", (input_data.id,))
     if not cursor.fetchone():
         conn.close()
         return JSONResponse(status_code=404, content=create_error_log(request, 404, "Point not found"))
     
     # 2. Δημιουργία Session ID
-    sess_id = f"SESS_{input_data.pointid}_{int(datetime.now().timestamp())}"
+    sess_id = f"SESS_{input_data.id}_{int(datetime.now().timestamp())}"
     
     # 3. Εισαγωγή στη Βάση
     # ΠΡΟΣΟΧΗ: Χρησιμοποιούμε τα νέα πεδία start_soc, end_soc, cost_per_kwh, vehicle_id
@@ -495,11 +502,11 @@ async def new_session(request: Request, input_data: SessionInput):
             input_data.amount,    # Αυτό πάει στο total_cost
             input_data.startsoc,
             input_data.endsoc,
-            input_data.pointid
+            input_data.id
         ))
         
         # Ενημέρωση ότι ο φορτιστής είναι ξανά AVAILABLE
-        cursor.execute("UPDATE Charger SET status = 'AVAILABLE' WHERE charger_id = %s", (input_data.pointid,))
+        cursor.execute("UPDATE Charger SET status = 'AVAILABLE' WHERE charger_id = %s", (input_data.id,))
         
         conn.commit()
     except mysql.connector.Error as err:
@@ -509,35 +516,95 @@ async def new_session(request: Request, input_data: SessionInput):
     conn.close()
     return {"status": "OK"}
 
-# --- 9. /sessions (Αναζήτηση) ---
+## --- 9. /sessions (Αναζήτηση Ιστορικού) ---
 @app.get(API_PREFIX + "/sessions/{point_id}/{date_from}/{date_to}")
 async def get_sessions(point_id: str, date_from: str, date_to: str):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     
-    # Μετατροπή string dates (YYYYMMDD) σε MySQL format
+    # 1. Μετατροπή ημερομηνιών
     try:
         d_from = datetime.strptime(date_from, "%Y%m%d")
-        d_to = datetime.strptime(date_to, "%Y%m%d") + timedelta(days=1) # +1 για να πιάσει όλη τη μέρα
+        d_to = datetime.strptime(date_to, "%Y%m%d") + timedelta(days=1)
     except ValueError:
-         return JSONResponse(status_code=400, content={"error": "Invalid date format. Use YYYYMMDD"})
+        conn.close()
+        return JSONResponse(status_code=400, content={"error": "Invalid date format. Use YYYYMMDD"})
 
+    # 2. Το Query με μετονομασία (ALIAS) για να ταιριάζει με την εκφώνηση
     query = """
-        SELECT * FROM ChargingSession 
+        SELECT 
+            start_time AS starttime, 
+            charging_end_time AS endtime, 
+            start_soc AS startsoc, 
+            end_soc AS endsoc, 
+            total_kwh AS totalkwh, 
+            cost_per_kwh AS kwhprice, 
+            total_cost AS amount
+        FROM ChargingSession 
         WHERE charger_id = %s 
         AND start_time >= %s AND start_time < %s
     """
+    
     cursor.execute(query, (point_id, d_from, d_to))
     results = cursor.fetchall()
     
-    # Διόρθωση datetime objects για να γίνουν JSON serializable
+    # 3. Μετατροπή datetime σε string (τώρα τα κλειδιά είναι starttime/endtime)
     for r in results:
-        if isinstance(r['start_time'], datetime):
-            r['start_time'] = r['start_time'].strftime("%Y-%m-%d %H:%M:%S")
-        if r['charging_end_time']:
-            r['charging_end_time'] = r['charging_end_time'].strftime("%Y-%m-%d %H:%M:%S")
-            
+        if isinstance(r['starttime'], datetime):
+            r['starttime'] = r['starttime'].strftime("%Y-%m-%d %H:%M:%S")
+        if r['endtime'] and isinstance(r['endtime'], datetime):
+            r['endtime'] = r['endtime'].strftime("%Y-%m-%d %H:%M:%S")
+        # Αν είναι None (π.χ. η φόρτιση τρέχει ακόμα), βάζουμε κενό ή null
+        elif r['endtime'] is None:
+             r['endtime'] = ""
+
     conn.close()
+    return results
+
+# --- 11. /pointstatus (Μεταβολές κατάστασης σημείου - Section g) ---
+@app.get(API_PREFIX + "/pointstatus/{point_id}/{date_from}/{date_to}")
+async def get_point_status(request: Request, point_id: str, date_from: str, date_to: str, format: str = "json"):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # 1. Μετατροπή ημερομηνιών
+    try:
+        d_from = datetime.strptime(date_from, "%Y%m%d")
+        d_to = datetime.strptime(date_to, "%Y%m%d") + timedelta(days=1) # +1 για να καλύψει όλη τη μέρα
+    except ValueError:
+        conn.close()
+        return JSONResponse(status_code=400, content=create_error_log(request, 400, "Invalid date format. Use YYYYMMDD"))
+
+    # 2. Query με ALIAS για να ταιριάζει με την εκφώνηση
+    query = """
+        SELECT 
+            change_time AS timeref, 
+            old_status AS old_state, 
+            new_status AS new_state
+        FROM StatusHistory
+        WHERE point_id = %s 
+        AND change_time >= %s AND change_time < %s
+        ORDER BY change_time DESC
+    """
+    
+    cursor.execute(query, (point_id, d_from, d_to))
+    results = cursor.fetchall()
+    conn.close()
+
+    # 3. Format datetime objects σε string (YYYY-MM-DD hh:mm)
+    for r in results:
+        if isinstance(r['timeref'], datetime):
+            r['timeref'] = r['timeref'].strftime("%Y-%m-%d %H:%M")
+
+    # 4. Διαχείριση CSV format
+    if format == "csv":
+        output = io.StringIO()
+        if results:
+            writer = csv.DictWriter(output, fieldnames=results[0].keys(), delimiter=',')
+            writer.writeheader()
+            writer.writerows(results)
+        return Response(content=output.getvalue(), media_type="text/csv")
+
     return results
 
 @app.exception_handler(HTTPException)

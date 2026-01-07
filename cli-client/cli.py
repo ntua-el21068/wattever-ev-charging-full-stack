@@ -767,7 +767,7 @@ def main():
     # Υποχρεωτική παράμετρος --id
     updpoint_parser.add_argument('--id',
                                required=True,
-                               type=str,
+                               type=int,
                                help='ID του φορτιστή (required)')
     
     # Προαιρετικές παράμετροι (τουλάχιστον μία πρέπει να δοθεί)

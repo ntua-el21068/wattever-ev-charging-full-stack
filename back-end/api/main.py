@@ -133,7 +133,7 @@ async def reset_points():
             s_id = str(location.get('id'))
             if s_id not in seen_stations:
                 cursor.execute(
-                    "INSERT INTO Station (station_id, name, address, latitude, longtitude) VALUES (%s, %s, %s, %s, %s)",
+                    "INSERT INTO Station (station_id, name, address, latitude, longitude) VALUES (%s, %s, %s, %s, %s)",
                     (s_id, location.get('name', 'Unknown'), location.get('address', 'Unknown'), 
                      location.get('latitude', 0), location.get('longitude', 0))
                 )
@@ -214,7 +214,7 @@ async def add_points(file: UploadFile = File(...)):
             name = row.get('name', 'Unknown Station')
             addr = row.get('address', 'Unknown Address')
             lat = float(row.get('latitude', 0))
-            lon = float(row.get('longitude', 0)) # Προσοχή αν στο CSV είναι 'longtitude'
+            lon = float(row.get('longitude', 0)) # Προσοχή αν στο CSV είναι 'longitude'
             
             conn_type = row.get('connector_type', 'Unknown')
             try:
@@ -233,7 +233,7 @@ async def add_points(file: UploadFile = File(...)):
             cursor.execute("SELECT station_id FROM Station WHERE station_id = %s", (sid,))
             if not cursor.fetchone():
                 cursor.execute(
-                    "INSERT INTO Station (station_id, name, address, latitude, longtitude) VALUES (%s, %s, %s, %s, %s)",
+                    "INSERT INTO Station (station_id, name, address, latitude, longitude) VALUES (%s, %s, %s, %s, %s)",
                     (sid, name, addr, lat, lon)
                 )
                 stations_added += 1
@@ -285,7 +285,7 @@ async def get_points(request: Request, status: str = None, format: str = "json")
         SELECT 
             'WATTever' as providerName,
             c.charger_id as pointid,
-            s.longtitude as lon,
+            s.longitude as lon,
             s.latitude as lat,
             c.status,
             ROUND(c.max_power_kw) as cap  
@@ -327,7 +327,7 @@ async def get_point_details(request: Request, point_id: str):
         SELECT 
             c.charger_id as pointid,
             s.latitude as lat,           -- ΥΠΟΧΡΕΩΤΙΚΟ (Spec)
-            s.longtitude as lon,         -- ΥΠΟΧΡΕΩΤΙΚΟ (Spec)
+            s.longitude as lon,         -- ΥΠΟΧΡΕΩΤΙΚΟ (Spec)
             c.status,                    -- ΥΠΟΧΡΕΩΤΙΚΟ (Spec)
             c.max_power_kw as cap,       -- ΥΠΟΧΡΕΩΤΙΚΟ (Spec)
             pp.fixed_price_kwh as kwhprice, -- ΥΠΟΧΡΕΩΤΙΚΟ (Spec)

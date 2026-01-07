@@ -66,3 +66,37 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+
+/* Χρώματα για τις πινέζες στον χάρτη */
+
+/* Πράσινη Πινέζα (Available) */
+.marker-green {
+  filter: hue-rotate(260deg) saturate(3) brightness(1.2); 
+}
+
+/* Κόκκινη Πινέζα (Reserved) */
+.marker-red {
+  filter: hue-rotate(140deg) saturate(3);
+}
+
+/* Πορτοκαλί Πινέζα (Charging) */
+.marker-orange {
+  filter: hue-rotate(170deg) saturate(5) brightness(1.1);
+}
+
+/* Γκρι Πινέζα (Offline) */
+.marker-gray {
+  filter: grayscale(100%);
+}
+
+/* Animation για τη φόρτιση */
+.pulse {
+  animation: pulse-animation 1.5s infinite;
+}
+
+@keyframes pulse-animation {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
+}

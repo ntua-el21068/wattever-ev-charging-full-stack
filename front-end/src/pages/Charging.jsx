@@ -4,16 +4,16 @@ import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios"; 
 import { Card, CardBody, CardHeader, Button, CircularProgress, Chip, Divider, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure } from "@heroui/react";
 
-// Εικονίδιο Κεραυνού (Σταθερό Component - Ορισμένο απ' έξω)
+// Εικονίδιο Κεραυνού
 const BoltIcon = (props) => (
   <svg aria-hidden="true" fill="none" focusable="false" height="1em" role="presentation" viewBox="0 0 24 24" width="1em" {...props}><path d="M6.09 13.28h3.09v7.2c0 1.68 2.07 2.52 3.25 1.33l9.48-9.63c.56-.57.16-1.54-.64-1.54h-3.09v-7.2c0-1.68-2.07-2.52-3.25-1.33l-9.48 9.63c-.56.57-.16 1.54.64 1.54Z" fill="currentColor" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} /></svg>
 );
 
-// Κάρτα Στατιστικών (Σταθερό Component - Ορισμένο απ' έξω)
+// Κάρτα Στατιστικών
 const StatsCard = ({ label, value, color }) => (
-  <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col items-center shadow-lg">
-    <p className="text-[10px] text-zinc-500 font-bold mb-1">{label}</p>
-    <p className={`text-xl font-bold ${color}`}>{value}</p>
+  <div className="bg-zinc-900 border border-zinc-800 p-3 rounded-xl flex flex-col items-center shadow-lg min-w-[80px]">
+    <p className="text-[10px] text-zinc-500 font-bold mb-1 uppercase">{label}</p>
+    <p className={`text-lg font-bold ${color}`}>{value}</p>
   </div>
 );
 
@@ -24,12 +24,15 @@ export default function ChargingPage() {
   // --- STATE ---
   const [chargerData, setChargerData] = useState(null); 
   const [view, setView] = useState("loading"); 
-  const [progress, setProgress] = useState(0);
+  
+  // To Visual Progress ξεκινάει από το 0
+  const [visualProgress, setVisualProgress] = useState(0);
   const [stats, setStats] = useState({ kwh: 0, cost: 0, time: 0 }); 
+  
   const {isOpen, onOpen, onOpenChange} = useDisclosure();
   const [loadingAction, setLoadingAction] = useState(false);
 
-  // 1. FETCH CHARGER DATA ON LOAD
+  // 1. FETCH CHARGER DATA
   useEffect(() => {
     const fetchCharger = async () => {
       try {
@@ -51,11 +54,13 @@ export default function ChargingPage() {
   }, [id, navigate]);
 
 
-  // 2. HANDLE START CHARGING
+  // 2. HANDLE START
   const handleStartCharging = async () => {
     setLoadingAction(true);
     try {
         await axios.post(`http://localhost:9876/api/charge/start/${id}/VEH_001`);
+        // Μόλις ξεκινήσει, μηδενίζουμε το progress για το DEMO
+        setVisualProgress(0); 
         setView("active");
     } catch (err) {
         alert("Σφάλμα εκκίνησης: " + (err.response?.data?.detail || err.message));
@@ -65,7 +70,7 @@ export default function ChargingPage() {
   };
 
 
-  // 3. HANDLE STOP SESSION
+  // 3. HANDLE STOP (Τερματισμός)
   const handleStopSession = async () => {
       setLoadingAction(true);
       try {
@@ -73,32 +78,49 @@ export default function ChargingPage() {
           setStats({
               kwh: res.data.kwh,
               cost: res.data.cost,
-              time: res.data.duration_min 
+              time: res.data.duration_min
           });
           setView("summary");
       } catch (err) {
-          alert("Σφάλμα τερματισμού: " + (err.response?.data?.detail || err.message));
+          // Αν σκάσει (π.χ. έχει κλείσει ήδη), απλά πήγαινε στο summary για το demo
+          setView("summary"); 
       } finally {
           setLoadingAction(false);
       }
   };
 
-  // --- TIMER SIMULATION ---
+  // --- DEMO LOGIC: 1% κάθε 1 δευτερόλεπτο ---
   useEffect(() => {
     let interval;
     if (view === "active") {
       interval = setInterval(() => {
+        setVisualProgress((prev) => {
+            // Αν φτάσει 100, σταματάει να ανεβαίνει
+            if (prev >= 100) return 100;
+            return prev + 1;
+        });
+
+        // Ενημερώνουμε μόνο χρόνο και κόστος λίγο για να φαίνεται ζωντανό
+        // Την ενέργεια (kWh) την αφήνουμε σταθερή όπως ζήτησες.
         setStats(prev => ({
-          kwh: prev.kwh + 0.005, 
-          cost: (prev.kwh + 0.005) * (chargerData?.kwhprice || 0.30),
-          time: prev.time + 1 
+            kwh: prev.kwh + 0.05, // Πολύ μικρή αύξηση ή σταθερή
+            cost: (prev.kwh + 0.05) * (chargerData?.kwhprice || 0.30),
+            time: prev.time + 1
         }));
-        // Αυξάνουμε το progress χωρίς να κάνουμε reset το component
-        setProgress(prev => (prev >= 100 ? 0 : prev + 1)); 
-      }, 1000); 
+
+      }, 1000); // Κάθε 1000ms = 1 δευτερόλεπτο
     }
     return () => clearInterval(interval);
   }, [view, chargerData]);
+
+
+  // --- AUTO-STOP WATCHER ---
+  // Παρακολουθεί το ποσοστό. Μόλις πάει 100 -> ΤΕΡΜΑΤΙΣΜΟΣ
+  useEffect(() => {
+      if (view === "active" && visualProgress >= 100) {
+          handleStopSession();
+      }
+  }, [visualProgress, view]);
 
 
   // --- RENDER ---
@@ -108,7 +130,7 @@ export default function ChargingPage() {
     <div className="min-h-screen w-full bg-black flex justify-center p-4 pt-10">
       <div className="w-full max-w-xl">
         
-        {/* === VIEW 1: PAYMENT (PREPARATION) === */}
+        {/* === VIEW 1: PAYMENT === */}
         {view === "payment" && (
             <div className="flex flex-col items-center gap-8 w-full animate-appearance-in text-white">
             <div className="flex items-center gap-3">
@@ -156,24 +178,28 @@ export default function ChargingPage() {
             
             <div className="relative flex items-center justify-center py-4">
                 <div className="absolute inset-0 bg-green-500/10 blur-3xl rounded-full"></div>
-                {/* ΕΔΩ ΕΙΝΑΙ Η ΑΛΛΑΓΗ: Επειδή είναι απευθείας στο render, δεν θα κάνει reset */}
+                
                 <CircularProgress 
-                classNames={{ svg: "w-72 h-72 drop-shadow-2xl", indicator: "stroke-green-500", track: "stroke-zinc-800", value: "text-4xl font-bold text-white" }}
-                value={progress} strokeWidth={3} showValueLabel={false}
+                    classNames={{ svg: "w-72 h-72 drop-shadow-2xl", indicator: "stroke-green-500", track: "stroke-zinc-800", value: "text-4xl font-bold text-white" }}
+                    value={visualProgress} 
+                    strokeWidth={3} 
+                    showValueLabel={false}
                 />
                 <div className="absolute flex flex-col items-center">
-                    <span className="text-5xl font-bold text-white">{stats.kwh.toFixed(2)}</span>
-                    <span className="text-sm text-zinc-500 font-bold tracking-widest">kWh</span>
+                    {/* Δείχνουμε το ποσοστό να ανεβαίνει 1% το δευτερόλεπτο */}
+                    <span className="text-6xl font-bold text-white">{visualProgress}%</span>
+                    <span className="text-sm text-green-400 font-bold tracking-widest mt-1">BATTERY</span>
                 </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3 w-full max-w-md">
+            <div className="grid grid-cols-4 gap-2 w-full max-w-md">
                 <StatsCard label="ΙΣΧΥΣ" value={`${chargerData?.cap || 22} kW`} color="text-white" />
+                <StatsCard label="ΕΝΕΡΓΕΙΑ" value={`${stats.kwh.toFixed(2)}`} color="text-yellow-400" />
                 <StatsCard label="ΧΡΟΝΟΣ" value={`${Math.floor(stats.time / 60)}:${(stats.time % 60).toString().padStart(2,'0')}`} color="text-blue-400" />
                 <StatsCard label="ΚΟΣΤΟΣ" value={`${stats.cost.toFixed(2)}€`} color="text-green-400" />
             </div>
 
-            <Button color="danger" variant="flat" onPress={onOpen} className="w-full max-w-md font-bold mt-4" isLoading={loadingAction}>
+            <Button color="danger" variant="flat" onPress={onOpen} className="w-full max-w-md font-bold mt-6" isLoading={loadingAction}>
                 ΤΕΡΜΑΤΙΣΜΟΣ
             </Button>
 

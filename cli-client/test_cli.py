@@ -9,18 +9,39 @@ import json
 import time
 import csv
 import io
+import requests
+
+
+
+
+def get_real_point_ids():
+    
+    try:
+        response = requests.get("http://localhost:9876/api/points", timeout=5)
+        if response.status_code == 200:
+            points = response.json()
+            real_ids = [str(p.get("pointid")) for p in points if p.get("pointid")]
+            return real_ids[:5] if real_ids else ["1", "2", "3"]  # Max 5 IDs for testing
+    except:
+        pass
+    return ["1", "2", "3"]  # Fallback
+
+def get_real_session_data():
+    
+    try:
+        response = requests.get("http://localhost:9876/api/sessions/1/20250101/20251231", timeout=3)
+        if response.status_code == 200 and response.json():
+            sessions = response.json()
+            if sessions:
+                return sessions[0]  # Return first session
+    except:
+        pass
+    return None  # No real sessions found
+
+
 
 def execute_cli_command(command_args, test_description=""):
-    """
-    Execute a CLI command and return the result
     
-    Args:
-        command_args: List of arguments for the CLI
-        test_description: Description of the test
-    
-    Returns:
-        tuple: (success, result_type, output)
-    """
     full_command = [sys.executable, "cli.py"] + command_args
     
     print("\n" + "=" * 70)
@@ -108,15 +129,18 @@ def validate_csv_output(csv_text):
         return False, f"Unexpected error: {error}", 0
 
 def run_comprehensive_test_suite():
-    """
-    Run all CLI tests and generate comprehensive report
-    """
-    print("=" * 70)
-    print("CLI TEST SUITE - WATTever Charge Point Management")
-    print("Group 51 - Software Engineering 2025-2026")
-    print("=" * 70)
     
-    # Define all test cases
+    real_ids = get_real_point_ids()
+    real_session = get_real_session_data()
+    
+    
+    if not real_ids:
+        print("ERROR: No real point IDs found from API")
+        return 1
+    
+    print(f"Using real point IDs for testing: {real_ids}")
+    
+    
     test_cases = [
         # Basic connectivity tests
         (["healthcheck"], "Basic API connectivity check"),
@@ -133,37 +157,43 @@ def run_comprehensive_test_suite():
         (["points", "--status", "available", "--format", "csv"], 
          "List available points in CSV format"),
         
-        # Point detail tests
-        (["point", "--id", "1"], "Get details for point ID 1"),
-        (["point", "--id", "2"], "Get details for point ID 2"),
+        # Point detail tests - USING REAL IDs
+        (["point", "--id", real_ids[0]], f"Get details for real point ID {real_ids[0]}"),
+        (["point", "--id", real_ids[1] if len(real_ids) > 1 else real_ids[0]], 
+         f"Get details for point ID {real_ids[1] if len(real_ids) > 1 else real_ids[0]}"),
         
-        # Reservation tests
-        (["reserve", "--id", "1"], "Reserve point ID 1 for 30 minutes"),
-        (["reserve", "--id", "2", "--minutes", "45"], "Reserve point ID 2 for 45 minutes"),
-        (["reserve", "--id", "3", "--minutes", "60"], "Reserve point ID 3 for 60 minutes"),
+        # Reservation tests - USING REAL IDs
+        (["reserve", "--id", real_ids[0]], f"Reserve point ID {real_ids[0]} for 30 minutes"),
+        (["reserve", "--id", real_ids[1] if len(real_ids) > 1 else real_ids[0], "--minutes", "45"], 
+         f"Reserve point ID {real_ids[1] if len(real_ids) > 1 else real_ids[0]} for 45 minutes"),
+        (["reserve", "--id", real_ids[2] if len(real_ids) > 2 else real_ids[0], "--minutes", "60"], 
+         f"Reserve point ID {real_ids[2] if len(real_ids) > 2 else real_ids[0]} for 60 minutes"),
         
-        # Update tests
-        (["updpoint", "--id", "1", "--status", "charging"], "Update point ID 1 status to charging"),
-        (["updpoint", "--id", "2", "--status", "available"], "Update point ID 2 status to available"),
-        (["updpoint", "--id", "1", "--price", "0.40"], "Update point ID 1 price to 0.40"),
-        (["updpoint", "--id", "3", "--status", "malfunction", "--price", "0.35"], 
-         "Update point ID 3 status and price"),
+        # Update tests - USING REAL IDs
+        (["updpoint", "--id", real_ids[0], "--status", "charging"], 
+         f"Update point ID {real_ids[0]} status to charging"),
+        (["updpoint", "--id", real_ids[1] if len(real_ids) > 1 else real_ids[0], "--status", "available"], 
+         f"Update point ID {real_ids[1] if len(real_ids) > 1 else real_ids[0]} status to available"),
+        (["updpoint", "--id", real_ids[0], "--price", "0.40"], 
+         f"Update point ID {real_ids[0]} price to 0.40"),
+        (["updpoint", "--id", real_ids[2] if len(real_ids) > 2 else real_ids[0], "--status", "malfunction", "--price", "0.35"], 
+         f"Update point ID {real_ids[2] if len(real_ids) > 2 else real_ids[0]} status and price"),
         
-        # Session history tests
-        (["sessions", "--id", "1", "--from", "20250101", "--to", "20251231"], 
-         "Get charging sessions for point ID 1"),
-        (["sessions", "--id", "1", "--from", "20250101", "--to", "20251231", "--format", "csv"], 
-         "Get charging sessions in CSV format"),
+        # Session history tests - USING REAL IDs
+        (["sessions", "--id", real_ids[0], "--from", "20250101", "--to", "20251231"], 
+         f"Get charging sessions for point ID {real_ids[0]}"),
+        (["sessions", "--id", real_ids[0], "--from", "20250101", "--to", "20251231", "--format", "csv"], 
+         f"Get charging sessions in CSV format for point {real_ids[0]}"),
         
-        # Point status history tests
-        (["pointstatus", "--id", "1", "--from", "20250101", "--to", "20251231"], 
-         "Get status history for point ID 1"),
-        (["pointstatus", "--id", "1", "--from", "20250101", "--to", "20251231", "--format", "csv"], 
-         "Get status history in CSV format"),
+        # Point status history tests - USING REAL IDs
+        (["pointstatus", "--id", real_ids[0], "--from", "20250101", "--to", "20251231"], 
+         f"Get status history for point ID {real_ids[0]}"),
+        (["pointstatus", "--id", real_ids[0], "--from", "20250101", "--to", "20251231", "--format", "csv"], 
+         f"Get status history in CSV format for point {real_ids[0]}"),
         
-        # New session recording test
+        # New session recording test - USING REAL ID
         (["newsession", 
-          "--id", "1510",
+          "--id", real_ids[0],
           "--starttime", "2025-11-10 19:00",
           "--endtime", "2025-11-10 22:00",
           "--startsoc", "20",
@@ -171,7 +201,7 @@ def run_comprehensive_test_suite():
           "--totalkwh", "10.0",
           "--kwhprice", "0.50",
           "--amount", "5.0"], 
-         "Record new charging session"),
+         f"Record new charging session for point {real_ids[0]}"),
         
         # Administrative commands
         (["resetpoints"], "Reset database to initial state"),
@@ -283,17 +313,20 @@ def run_comprehensive_test_suite():
         return 1
 
 def run_api_communication_test():
-    """
-    Specialized test to verify CLI-API communication
-    """
+    
+
     print("\n" + "=" * 70)
     print("API COMMUNICATION VERIFICATION TEST")
     print("=" * 70)
     
+        
+    real_ids = get_real_point_ids()
+    test_id = real_ids[0] if real_ids else "1"
+    
     test_commands = [
         ["healthcheck"],
         ["points"],
-        ["point", "--id", "1"]
+        ["point", "--id", test_id]
     ]
     
     api_connections = 0
@@ -330,10 +363,14 @@ def run_csv_format_validation():
     print("CSV FORMAT VALIDATION TEST")
     print("=" * 70)
     
+        
+    real_ids = get_real_point_ids()
+    test_id = real_ids[0] if real_ids else "1"
+    
     csv_tests = [
         (["points", "--format", "csv"], "Points list CSV"),
-        (["sessions", "--id", "1", "--from", "20250101", "--to", "20251231", "--format", "csv"], 
-         "Sessions CSV"),
+        (["sessions", "--id", test_id, "--from", "20250101", "--to", "20251231", "--format", "csv"], 
+         f"Sessions CSV for point {test_id}"),
     ]
     
     for command_args, test_name in csv_tests:
@@ -351,9 +388,8 @@ def run_csv_format_validation():
             print(f"  CSV VALIDATION: SKIPPED - Command failed or no output")
 
 if __name__ == "__main__":
-    """
-    Main execution entry point
-    """
+  
+
     try:
         print("Starting CLI Test Suite...")
         

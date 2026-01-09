@@ -69,5 +69,7 @@ http://localhost:9876/docs
 * POST /api/reserve/{point_id} : Κράτηση θέσης
 * POST /api/newsession : Καταγραφή νέας φόρτισης
 
+7. Για τους έλεγχους επίδοσης του απι χρειαζεται εγκατάσταση του ποστμαν και τρέξιμο του αρχειου api_documentation.json
+
 Ομάδα Ανάπτυξης:
 SoftEng 2025-2026 Team 51

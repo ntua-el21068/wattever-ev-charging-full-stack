@@ -70,4 +70,4 @@ http://localhost:9876/docs
 * POST /api/newsession : Καταγραφή νέας φόρτισης
 
 Ομάδα Ανάπτυξης:
-SoftEng 2025-2026 Team
+SoftEng 2025-2026 Team 51

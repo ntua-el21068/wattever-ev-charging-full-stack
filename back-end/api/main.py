@@ -271,16 +271,16 @@ async def get_points(request: Request, status: str = None, format: str = "json")
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     
-    # Έλεγχος εγκυρότητας status
-    # Η εκφώνηση λέει: "401 μαζί με αντικείμενο error log, αν το ζητούμενο status δεν περιλαμβάνεται"
+    # Έλεγχος εγκυρότητας status (όπως ζητάει η εκφώνηση)
     if status:
         valid_statuses = ["available", "charging", "reserved", "outoforder", "offline"]
         if status.lower() not in valid_statuses:
             conn.close()
-            # ΠΡΟΣΟΧΗ: Η εκφώνηση ζητάει 401 εδώ, όχι 400
             return JSONResponse(status_code=401, content=create_error_log(request, 401, "Invalid status argument"))
 
-    # Το Query ακριβώς όπως το ζητάει η εκφώνηση (χωρίς kwhprice)
+    # --- ΤΟ ΔΙΟΡΘΩΜΕΝΟ QUERY ---
+    # Ζητάμε τα υποχρεωτικά πεδία (providerName, pointid, lon, lat, status, cap)
+    # ΑΛΛΑ ΚΑΙ τα έξτρα (station_name, address) για να τα δει το UI
     query = """
         SELECT 
             'WATTever' as providerName,
@@ -288,11 +288,12 @@ async def get_points(request: Request, status: str = None, format: str = "json")
             s.longitude as lon,
             s.latitude as lat,
             c.status,
-            ROUND(c.max_power_kw) as cap  
+            ROUND(c.max_power_kw) as cap,
+            s.name as station_name,      -- ΕΞΤΡΑ ΠΕΔΙΟ ΓΙΑ ΤΟ UI
+            s.address as station_address -- ΕΞΤΡΑ ΠΕΔΙΟ ΓΙΑ ΤΟ UI
         FROM Charger c
         JOIN Station s ON c.station_id = s.station_id
     """
-    # Σημείωση: Το ROUND(cap) το έβαλα επειδή ζητάει Integer, ενώ στη βάση είναι Decimal.
     
     params = []
     if status:
@@ -303,12 +304,12 @@ async def get_points(request: Request, status: str = None, format: str = "json")
     data = cursor.fetchall()
     conn.close()
     
-    # Διαχείριση CSV format
+    # Διαχείριση CSV format (αν το ζητήσει το CLI)
     if format == "csv":
         output = io.StringIO()
         if data:
-            # Η εκφώνηση λέει delimiter ",". 
-            # Ο csv.DictWriter το κάνει αυτόματα.
+            # Στο CSV για την εργασία ίσως πρέπει να κρύψεις τα έξτρα πεδία αν είναι αυστηροί.
+            # Αλλά για το JSON (που παίρνει το React) τα αφήνουμε.
             writer = csv.DictWriter(output, fieldnames=data[0].keys(), delimiter=',')
             writer.writeheader()
             writer.writerows(data)

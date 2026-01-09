@@ -1,0 +1,180 @@
+{
+  "test_suite": "CLI Functional Tests",
+  "timestamp": "2026-01-09 19:00:41",
+  "environment": {
+    "python_version": "3.12.3 (main, Nov  6 2025, 13:44:16) [GCC 13.3.0]",
+    "platform": "linux"
+  },
+  "statistics": {
+    "total_tests": 23,
+    "passed": 20,
+    "failed": 3,
+    "success_rate": 86.95652173913044
+  },
+  "test_cases": [
+    {
+      "command": "healthcheck",
+      "description": "Basic API connectivity check",
+      "success": true,
+      "result_type": "api_success",
+      "timestamp": "2026-01-09 19:00:15"
+    },
+    {
+      "command": "points",
+      "description": "List all charging points",
+      "success": true,
+      "result_type": "api_success",
+      "timestamp": "2026-01-09 19:00:16"
+    },
+    {
+      "command": "points --status available",
+      "description": "List available charging points",
+      "success": true,
+      "result_type": "api_success",
+      "timestamp": "2026-01-09 19:00:17"
+    },
+    {
+      "command": "points --status charging",
+      "description": "List charging points in use",
+      "success": true,
+      "result_type": "api_success",
+      "timestamp": "2026-01-09 19:00:19"
+    },
+    {
+      "command": "points --status reserved",
+      "description": "List reserved charging points",
+      "success": true,
+      "result_type": "api_success",
+      "timestamp": "2026-01-09 19:00:20"
+    },
+    {
+      "command": "points --format json",
+      "description": "List points in JSON format",
+      "success": true,
+      "result_type": "api_success",
+      "timestamp": "2026-01-09 19:00:21"
+    },
+    {
+      "command": "points --format csv",
+      "description": "List points in CSV format",
+      "success": true,
+      "result_type": "api_success",
+      "timestamp": "2026-01-09 19:00:22"
+    },
+    {
+      "command": "points --status available --format csv",
+      "description": "List available points in CSV format",
+      "success": true,
+      "result_type": "api_success",
+      "timestamp": "2026-01-09 19:00:23"
+    },
+    {
+      "command": "point --id 1",
+      "description": "Get details for point ID 1",
+      "success": true,
+      "result_type": "success_unknown",
+      "timestamp": "2026-01-09 19:00:24"
+    },
+    {
+      "command": "point --id 2",
+      "description": "Get details for point ID 2",
+      "success": true,
+      "result_type": "success_unknown",
+      "timestamp": "2026-01-09 19:00:25"
+    },
+    {
+      "command": "reserve --id 1",
+      "description": "Reserve point ID 1 for 30 minutes",
+      "success": false,
+      "result_type": "mock_data",
+      "timestamp": "2026-01-09 19:00:26"
+    },
+    {
+      "command": "reserve --id 2 --minutes 45",
+      "description": "Reserve point ID 2 for 45 minutes",
+      "success": false,
+      "result_type": "mock_data",
+      "timestamp": "2026-01-09 19:00:28"
+    },
+    {
+      "command": "reserve --id 3 --minutes 60",
+      "description": "Reserve point ID 3 for 60 minutes",
+      "success": false,
+      "result_type": "mock_data",
+      "timestamp": "2026-01-09 19:00:29"
+    },
+    {
+      "command": "updpoint --id 1 --status charging",
+      "description": "Update point ID 1 status to charging",
+      "success": true,
+      "result_type": "success_unknown",
+      "timestamp": "2026-01-09 19:00:30"
+    },
+    {
+      "command": "updpoint --id 2 --status available",
+      "description": "Update point ID 2 status to available",
+      "success": true,
+      "result_type": "success_unknown",
+      "timestamp": "2026-01-09 19:00:31"
+    },
+    {
+      "command": "updpoint --id 1 --price 0.40",
+      "description": "Update point ID 1 price to 0.40",
+      "success": true,
+      "result_type": "success_unknown",
+      "timestamp": "2026-01-09 19:00:32"
+    },
+    {
+      "command": "updpoint --id 3 --status malfunction --price 0.35",
+      "description": "Update point ID 3 status and price",
+      "success": true,
+      "result_type": "success_unknown",
+      "timestamp": "2026-01-09 19:00:33"
+    },
+    {
+      "command": "sessions --id 1 --from 20250101 --to 20251231",
+      "description": "Get charging sessions for point ID 1",
+      "success": true,
+      "result_type": "api_success",
+      "timestamp": "2026-01-09 19:00:34"
+    },
+    {
+      "command": "sessions --id 1 --from 20250101 --to 20251231 --format csv",
+      "description": "Get charging sessions in CSV format",
+      "success": true,
+      "result_type": "api_success",
+      "timestamp": "2026-01-09 19:00:36"
+    },
+    {
+      "command": "pointstatus --id 1 --from 20250101 --to 20251231",
+      "description": "Get status history for point ID 1",
+      "success": true,
+      "result_type": "api_success",
+      "timestamp": "2026-01-09 19:00:37"
+    },
+    {
+      "command": "pointstatus --id 1 --from 20250101 --to 20251231 --format csv",
+      "description": "Get status history in CSV format",
+      "success": true,
+      "result_type": "api_success",
+      "timestamp": "2026-01-09 19:00:38"
+    },
+    {
+      "command": "newsession --id 1510 --starttime 2025-11-10 19:00 --endtime 2025-11-10 22:00 --startsoc 20 --endsoc 40 --totalkwh 10.0 --kwhprice 0.50 --amount 5.0",
+      "description": "Record new charging session",
+      "success": true,
+      "result_type": "success_unknown",
+      "timestamp": "2026-01-09 19:00:39"
+    },
+    {
+      "command": "resetpoints",
+      "description": "Reset database to initial state",
+      "success": true,
+      "result_type": "success_unknown",
+      "timestamp": "2026-01-09 19:00:40"
+    }
+  ],
+  "failure_analysis": {
+    "mock_data": 3
+  }
+}

@@ -119,7 +119,7 @@ async def reset_points(request: Request):
             s_id = str(location.get('id'))
             if s_id not in seen_stations:
                 cursor.execute(
-                    "INSERT INTO Station (station_id, name, address, latitude, longtitude) VALUES (%s, %s, %s, %s, %s)",
+                    "INSERT INTO Station (station_id, name, address, latitude, longitude) VALUES (%s, %s, %s, %s, %s)",
                     (s_id, location.get('name', 'Unknown'), location.get('address', 'Unknown'), 
                      location.get('latitude', 0), location.get('longitude', 0))
                 )
@@ -175,7 +175,7 @@ async def add_points(request: Request, file: UploadFile = File(...)):
             cursor.execute("SELECT station_id FROM Station WHERE station_id = %s", (sid,))
             if not cursor.fetchone():
                 cursor.execute(
-                    "INSERT INTO Station (station_id, name, address, latitude, longtitude) VALUES (%s, %s, %s, %s, %s)",
+                    "INSERT INTO Station (station_id, name, address, latitude, longitude) VALUES (%s, %s, %s, %s, %s)",
                     (sid, row.get('name', 'Unknown'), row.get('address', 'Unknown'), 
                      float(row.get('latitude', 0)), float(row.get('longitude', 0)))
                 )
@@ -216,7 +216,7 @@ async def get_points(request: Request, status: str = None, format: str = "json")
         SELECT 
             'WATTever' as providerName,
             c.charger_id as pointid,
-            s.longtitude as lon,
+            s.longitude as lon,
             s.latitude as lat,
             c.status,
             ROUND(c.max_power_kw) as cap,
@@ -255,7 +255,7 @@ async def get_point_details(request: Request, point_id: str):
         SELECT 
             c.charger_id as pointid,
             st.latitude as lat,
-            st.longtitude as lon,
+            st.longitude as lon,
             c.status,
             c.max_power_kw as cap,
             pp.fixed_price_kwh as kwhprice,

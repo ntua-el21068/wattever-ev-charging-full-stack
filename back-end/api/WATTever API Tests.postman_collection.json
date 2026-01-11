@@ -1,0 +1,323 @@
+{
+	"info": {
+		"_postman_id": "66d4c52c-6ed1-495e-8c3e-6f24f2dc4850",
+		"name": "WATTever API Tests",
+		"description": "Functional tests for NTUA SoftEng 2025 Project (Team 51)",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "51404694",
+		"_collection_link": "https://ntua-el21165-3398773.postman.co/workspace/10450018-9458-468c-862e-c7a67b579e46/collection/51404694-66d4c52c-6ed1-495e-8c3e-6f24f2dc4850?action=share&source=collection_link&creator=51404694"
+	},
+	"item": [
+		{
+			"name": "1. Healthcheck",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"pm.test(\"Response has status OK\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.status).to.eql(\"OK\");",
+							"    pm.expect(jsonData).to.have.property(\"dbconnection\");",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/admin/healthcheck",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"admin",
+						"healthcheck"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "2. Reset Points (Setup)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"pm.test(\"Database reset successful\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.status).to.eql(\"OK\");",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/admin/resetpoints",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"admin",
+						"resetpoints"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "3. Get All Points",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"pm.test(\"Response is an array\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.be.an(\"array\");",
+							"    if(jsonData.length > 0) {",
+							"        pm.expect(jsonData[0]).to.have.property(\"pointid\");",
+							"    }",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/points",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"points"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "4. Get Specific Point",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"pm.test(\"Correct Point ID returned\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    // Assuming ID 1 exists after reset",
+							"    pm.expect(jsonData.pointid).to.eql(\"4725860\");",
+							"    pm.expect(jsonData).to.have.property(\"kwhprice\");",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/point/4725860",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"point",
+						"4725860"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "5. Update Point",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"pm.test(\"Price updated successfully\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.kwhprice).to.eql(0.55);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"kwhprice\": 0.55,\n    \"status\": \"available\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/updpoint/4725860",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"updpoint",
+						"4725860"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "6. Reserve Point",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status is 200 or 400\", function () {",
+							"    // 200 αν είναι available, 400 αν έχει ήδη κρατηθεί από προηγούμενο run",
+							"    pm.expect(pm.response.code).to.be.oneOf([200, 400]);",
+							"});",
+							"if (pm.response.code === 200) {",
+							"    pm.test(\"Reservation successful\", function () {",
+							"        var jsonData = pm.response.json();",
+							"        pm.expect(jsonData.status).to.eql(\"reserved\");",
+							"    });",
+							"}"
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/reserve/4725860/30",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"reserve",
+						"4725860",
+						"30"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "7. Get Sessions (History)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"pm.test(\"Returns array\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.be.an(\"array\");",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/sessions/1/20250101/20251231",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"sessions",
+						"1",
+						"20250101",
+						"20251231"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "8. Point Status History",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/pointstatus/1/20250101/20251231",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"pointstatus",
+						"1",
+						"20250101",
+						"20251231"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:9876/api",
+			"type": "string"
+		}
+	]
+}

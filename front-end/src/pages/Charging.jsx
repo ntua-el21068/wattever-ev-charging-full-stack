@@ -5,7 +5,6 @@ import { Card, CardBody, CardHeader, Button, CircularProgress, Chip, Divider, Mo
 
 const DEMO_TOTAL_MS = 2 * 60 * 1000; 
 
-// --- HELPER: Distance Calculation ---
 const getDistanceFromLatLonInM = (lat1, lon1, lat2, lon2) => {
   if (!lat1 || !lon1 || !lat2 || !lon2) return Infinity;
   const R = 6371e3; 
@@ -43,19 +42,14 @@ export default function ChargingPage() {
   
   const {isOpen, onOpen, onOpenChange} = useDisclosure();
 
-  // 1. GET GEOLOCATION
   useEffect(() => {
     if ("geolocation" in navigator) {
         navigator.geolocation.getCurrentPosition((position) => {
-            setUserLocation({ 
-                lat: position.coords.latitude, 
-                lon: position.coords.longitude 
-            });
+            setUserLocation({ lat: position.coords.latitude, lon: position.coords.longitude });
         });
     }
   }, []);
 
-  // 2. INITIAL FETCH
   useEffect(() => {
     if (!id) {
         const savedId = localStorage.getItem('active_session_point_id');
@@ -63,22 +57,17 @@ export default function ChargingPage() {
         else setView("empty");
         return;
     }
-
     const fetchData = async () => {
       try {
         const res = await axios.get(`http://localhost:9876/api/point/${id}`);
         setChargerData(res.data);
         const status = (res.data.status || '').toUpperCase();
-
         if (status === 'CHARGING') {
              setView("active");
              localStorage.setItem('active_session_point_id', id);
              if (!localStorage.getItem(`session_start_${id}`)) {
-                 if(res.data.current_session_start) {
-                     localStorage.setItem(`session_start_${id}`, new Date(res.data.current_session_start).getTime().toString());
-                 } else {
-                     localStorage.setItem(`session_start_${id}`, Date.now().toString());
-                 }
+                 if(res.data.current_session_start) localStorage.setItem(`session_start_${id}`, new Date(res.data.current_session_start).getTime().toString());
+                 else localStorage.setItem(`session_start_${id}`, Date.now().toString());
              }
         } else if (status === 'AVAILABLE' || status === 'RESERVED') {
              setView("payment"); 
@@ -90,37 +79,23 @@ export default function ChargingPage() {
     fetchData();
   }, [id, navigate]);
 
-  // 3. FETCH NEARBY (FILTERED < 500m)
   useEffect(() => {
     const fetchNearby = async () => {
         if (!userLocation) return;
-
         try {
             const res = await axios.get('http://localhost:9876/api/points');
-            
-            // 1. Calculate Distances
             const withDistance = res.data.map(p => ({
                 ...p,
                 distance: getDistanceFromLatLonInM(userLocation.lat, userLocation.lon, parseFloat(p.lat), parseFloat(p.lon))
             }));
-
-            // 2. Filter: Available + Not Current + Within 500m
-            const available = withDistance.filter(p => 
-                (p.status || '').toUpperCase() === 'AVAILABLE' && 
-                String(p.pointid) !== String(id) &&
-                p.distance <= 500 // Geofencing Filter
-            );
-            
-            // 3. Sort by closest
+            const available = withDistance.filter(p => (p.status || '').toUpperCase() === 'AVAILABLE' && String(p.pointid) !== String(id) && p.distance <= 500);
             available.sort((a, b) => a.distance - b.distance);
-
             setNearbyPoints(available); 
         } catch(e) { console.error(e); }
     };
     fetchNearby();
   }, [id, userLocation]);
 
-  // 4. LOGIC LOOP
   useEffect(() => {
     let interval;
     if (view === "active" && id) {
@@ -128,17 +103,11 @@ export default function ChargingPage() {
         const startTimeStr = localStorage.getItem(`session_start_${id}`);
         if (!startTimeStr) return;
         const elapsedMs = Date.now() - parseInt(startTimeStr);
-        
         let newProgress = (elapsedMs / DEMO_TOTAL_MS) * 100;
-        if (newProgress >= 100) {
-            newProgress = 100;
-            setView("disconnecting");
-        }
-
+        if (newProgress >= 100) { newProgress = 100; setView("disconnecting"); }
         const durationSec = Math.floor(elapsedMs / 1000);
         const simulatedKwh = (22 * (Math.min(elapsedMs, DEMO_TOTAL_MS) / 3600000)); 
         const simulatedCost = simulatedKwh * (chargerData?.kwhprice || 0.30);
-
         setProgress(newProgress);
         setStats({ timeSec: durationSec, kwh: simulatedKwh, cost: simulatedCost });
       }, 1000); 
@@ -148,13 +117,11 @@ export default function ChargingPage() {
     return () => clearInterval(interval);
   }, [view, id, chargerData]);
 
-  // ACTIONS
   const handleStartCharging = async () => {
     setLoadingAction(true);
     try {
         await axios.post(`http://localhost:9876/api/charge/start/${id}/VEH_001`);
-        const now = Date.now();
-        localStorage.setItem(`session_start_${id}`, now.toString());
+        localStorage.setItem(`session_start_${id}`, Date.now().toString());
         localStorage.setItem('active_session_point_id', id);
         setStats({ kwh: 0, cost: 0, timeSec: 0 });
         setProgress(0);
@@ -166,14 +133,9 @@ export default function ChargingPage() {
       setLoadingAction(true);
       try {
           const res = await axios.post(`http://localhost:9876/api/charge/stop/${id}`);
-          setStats({ 
-              kwh: res.data.kwh, 
-              cost: res.data.cost, 
-              timeSec: res.data.duration_min * 60 
-          });
-      } catch (err) {
-          console.error("Stop error or demo mode, using local stats", err);
-      } finally {
+          setStats({ kwh: res.data.kwh, cost: res.data.cost, timeSec: res.data.duration_min * 60 });
+      } catch (err) { console.error(err); } 
+      finally {
           localStorage.removeItem(`session_start_${id}`);
           localStorage.removeItem('active_session_point_id');
           setView("summary");
@@ -186,12 +148,7 @@ export default function ChargingPage() {
       try {
           const res = await axios.post(`http://localhost:9876/api/charge/stop/${id}`);
           const overstayFee = overstaySec > 30 ? 2.50 : 0.00; 
-          setStats({ 
-              kwh: res.data.kwh, 
-              cost: res.data.cost + overstayFee, 
-              timeSec: res.data.duration_min * 60,
-              overstayFee: overstayFee
-          });
+          setStats({ kwh: res.data.kwh, cost: res.data.cost + overstayFee, timeSec: res.data.duration_min * 60, overstayFee: overstayFee });
           setView("summary");
       } catch (err) { 
           const overstayFee = overstaySec > 30 ? 2.50 : 0.00;
@@ -204,20 +161,15 @@ export default function ChargingPage() {
       }
   };
 
-  // --- DUMMY PDF ACTION ---
-  const handleDownloadPDF = () => {
-      alert("Receipt Downloaded! (Simulation)");
-  };
-
+  const handleDownloadPDF = () => { alert("Receipt Downloaded! (Simulation)"); };
   const handleGoToMap = (targetId) => { navigate('/', { state: { targetId: targetId } }); };
   const formatTime = (s) => `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
 
   return (
-    <div className="min-h-screen w-full bg-black flex justify-center p-4 pt-10 overflow-y-auto">
-      <div className="w-full max-w-xl flex flex-col items-center pb-20">
-        
+    <div className="h-full w-full bg-black flex justify-center text-white overflow-y-auto overflow-x-hidden">
+      <div className="w-full max-w-xl flex flex-col items-center p-4 pt-6 pb-24">
         {view === "loading" && <CircularProgress color="primary" />}
-
+        
         {view === "empty" && (
             <Card className="w-full max-w-md bg-zinc-900 border border-zinc-800 p-10 flex flex-col items-center text-center">
                 <div className="w-24 h-24 bg-zinc-800 rounded-full flex items-center justify-center text-zinc-600 text-5xl mb-6">🔌</div>
@@ -257,22 +209,9 @@ export default function ChargingPage() {
                     <StatsCard label="TIME" value={formatTime(stats.timeSec)} color="text-blue-400" />
                     <StatsCard label="COST" value={`${stats.cost.toFixed(2)}€`} color="text-green-400" />
                 </div>
-                
                 <Button color="danger" variant="flat" onPress={onOpen} className="w-full max-w-md font-bold mt-6">STOP SESSION</Button>
-
                 <Modal isOpen={isOpen} onOpenChange={onOpenChange} backdrop="blur" classNames={{base: "bg-zinc-900 border border-zinc-700"}}>
-                    <ModalContent>
-                    {(onClose) => (
-                        <>
-                        <ModalHeader className="text-white">Stop Charging</ModalHeader>
-                        <ModalBody className="text-zinc-400">Are you sure you want to stop the session? You will be billed for the energy consumed so far.</ModalBody>
-                        <ModalFooter>
-                            <Button variant="light" onPress={onClose} className="text-white">Cancel</Button>
-                            <Button color="danger" onPress={() => { onClose(); handleStopSession(); }}>Yes, Stop</Button>
-                        </ModalFooter>
-                        </>
-                    )}
-                    </ModalContent>
+                    <ModalContent>{(onClose) => (<><ModalHeader className="text-white">Stop Charging</ModalHeader><ModalBody className="text-zinc-400">Are you sure you want to stop the session?</ModalBody><ModalFooter><Button variant="light" onPress={onClose} className="text-white">Cancel</Button><Button color="danger" onPress={() => { onClose(); handleStopSession(); }}>Yes, Stop</Button></ModalFooter></>)}</ModalContent>
                 </Modal>
             </div>
         )}
@@ -294,15 +233,10 @@ export default function ChargingPage() {
         {view === "summary" && (
             <div className="flex flex-col items-center gap-6 w-full animate-appearance-in text-white">
                 <div className="flex items-center gap-2 mb-4"><div className="bg-green-500 rounded-full p-1"><CheckIcon /></div><h1 className="text-3xl font-bold">Session Complete</h1></div>
-                
                 <div className="w-full max-w-sm bg-white text-black p-0 rounded-none shadow-2xl relative overflow-hidden">
                     <div className="w-full h-4 bg-zinc-900 absolute -top-2 left-0" style={{clipPath: "polygon(0% 100%, 5% 0%, 10% 100%, 15% 0%, 20% 100%, 25% 0%, 30% 100%, 35% 0%, 40% 100%, 45% 0%, 50% 100%, 55% 0%, 60% 100%, 65% 0%, 70% 100%, 75% 0%, 80% 100%, 85% 0%, 90% 100%, 95% 0%, 100% 100%)"}}></div>
                     <div className="p-8 pt-10 flex flex-col gap-4">
-                        <div className="text-center border-b-2 border-dashed border-zinc-300 pb-4 mb-2">
-                            <h2 className="font-black text-2xl tracking-tighter">WATT<span className="text-zinc-600">ever</span></h2>
-                            <p className="text-xs text-zinc-500 uppercase">Receipt</p>
-                            <p className="text-xs text-zinc-400">{new Date().toLocaleString()}</p>
-                        </div>
+                        <div className="text-center border-b-2 border-dashed border-zinc-300 pb-4 mb-2"><h2 className="font-black text-2xl tracking-tighter">WATT<span className="text-zinc-600">ever</span></h2><p className="text-xs text-zinc-500 uppercase">Receipt</p><p className="text-xs text-zinc-400">{new Date().toLocaleString()}</p></div>
                         <div className="flex justify-between text-sm"><span>Energy</span><span className="font-bold">{stats.kwh.toFixed(2)} kWh</span></div>
                         <div className="flex justify-between text-sm"><span>Duration</span><span className="font-bold">{formatTime(stats.timeSec)}</span></div>
                         {stats.overstayFee > 0 && <div className="flex justify-between text-sm text-red-600"><span>Overstay</span><span className="font-bold">+{stats.overstayFee}€</span></div>}
@@ -310,7 +244,6 @@ export default function ChargingPage() {
                     </div>
                     <div className="w-full h-4 bg-zinc-900 absolute -bottom-2 left-0" style={{clipPath: "polygon(0% 0%, 5% 100%, 10% 0%, 15% 100%, 20% 0%, 25% 100%, 30% 0%, 35% 100%, 40% 0%, 45% 100%, 50% 0%, 55% 100%, 60% 0%, 65% 100%, 70% 0%, 75% 100%, 80% 0%, 85% 100%, 90% 0%, 95% 100%, 100% 0%)"}}></div>
                 </div>
-
                 <div className="flex gap-3 w-full max-w-sm mt-4">
                     <Button variant="ghost" className="flex-1 text-white border-zinc-700" onPress={handleDownloadPDF}>Download PDF</Button>
                     <Button color="primary" className="flex-1 font-bold" onPress={() => navigate('/')}>Map</Button>
@@ -318,32 +251,32 @@ export default function ChargingPage() {
             </div>
         )}
 
-        {/* --- NEARBY CHARGERS SECTION (< 500m ONLY) - SCROLLABLE --- */}
-        <div className="w-full max-w-md mt-12 mb-10 border-t border-zinc-800 pt-6">
-            <h3 className="text-lg font-bold text-zinc-400 mb-4 uppercase tracking-widest">Available Chargers Nearby (&lt;500m)</h3>
-            
-            {/* SCROLLABLE CONTAINER */}
-            <div className="flex flex-col gap-3 max-h-[350px] overflow-y-auto pr-2" style={{scrollbarWidth: 'thin', scrollbarColor: '#3f3f46 #18181b'}}>
+        <div className="w-full mt-12 mb-2 border-t border-zinc-800 pt-6 shrink-0">
+            <h3 className="text-lg font-bold text-zinc-400 mb-4 uppercase tracking-widest px-1">Available Chargers Nearby (&lt;500m)</h3>
+            <div className="flex flex-row sm:flex-col gap-3 overflow-x-auto sm:overflow-visible pb-4 sm:pb-0 snap-x snap-mandatory w-full" style={{ scrollbarWidth: 'none' }}>
                 {nearbyPoints.length > 0 ? nearbyPoints.map(point => (
-                    <Card key={point.pointid} isPressable onPress={() => handleGoToMap(point.pointid)} className="bg-zinc-900 border border-zinc-800 hover:border-zinc-600 transition-all flex-shrink-0">
+                    <Card 
+                        key={point.pointid} 
+                        isPressable 
+                        onPress={() => handleGoToMap(point.pointid)} 
+                        className="bg-zinc-900 border border-zinc-800 hover:border-zinc-600 transition-all min-w-[85%] sm:min-w-0 snap-center shrink-0"
+                    >
                         <CardBody className="flex flex-row justify-between items-center p-4">
                             <div className="flex flex-col items-start text-left">
-                                <span className="text-white font-bold">{point.station_address || `Station #${point.pointid}`}</span>
+                                <span className="text-white font-bold truncate max-w-[180px] sm:max-w-full">{point.station_address || `Station #${point.pointid}`}</span>
                                 <div className="flex gap-2 mt-1">
                                     <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded">{point.cap} kW</span>
-                                    {/* Distance Badge */}
-                                    <span className="text-xs text-green-400 bg-green-900/30 border border-green-500/30 px-2 py-0.5 rounded font-mono">
-                                        {Math.round(point.distance)}m
-                                    </span>
+                                    <span className="text-xs text-green-400 bg-green-900/30 border border-green-500/30 px-2 py-0.5 rounded font-mono">{Math.round(point.distance)}m</span>
                                 </div>
                             </div>
-                            <Button size="sm" className="bg-green-600 text-black font-bold shadow-lg animate-pulse">CHARGE</Button>
+                            {/* SOS: Προστέθηκε το onPress ΕΔΩ */}
+                            <Button size="sm" onPress={() => handleGoToMap(point.pointid)} className="bg-green-600 text-black font-bold shadow-lg animate-pulse ml-2">CHARGE</Button>
                         </CardBody>
                     </Card>
-                )) : (<p className="text-zinc-600 italic">No chargers found within 500m.</p>)}
+                )) : (<p className="text-zinc-600 italic px-4">No chargers found within 500m.</p>)}
+                <div className="w-4 shrink-0 sm:hidden"></div>
             </div>
         </div>
-
       </div>
     </div>
   );

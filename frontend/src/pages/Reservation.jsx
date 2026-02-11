@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { Card, CardBody, Button, Chip, CircularProgress } from "@heroui/react";
+import API_BASE_URL from '../config';
 
 const getDistanceFromLatLonInM = (lat1, lon1, lat2, lon2) => {
   if (!lat1 || !lon1 || !lat2 || !lon2) return Infinity;
@@ -41,7 +42,7 @@ export default function ReservationPage() {
 
   const fetchStatus = useCallback(async () => {
     try {
-        const res = await axios.get('http://localhost:9876/api/user/active_reservation');
+        const res = await axios.get(`${API_BASE_URL}/api/user/active_reservation`);
         if (res.data && res.data.reservation_id) {
             setReservationData(res.data);
             const endTime = new Date(res.data.expiration_time).getTime();
@@ -51,7 +52,7 @@ export default function ReservationPage() {
             return; 
         }
         if (id) {
-            const pointRes = await axios.get(`http://localhost:9876/api/point/${id}`);
+            const pointRes = await axios.get(`${API_BASE_URL}/api/point/${id}`);
             if (pointRes.data.status === 'AVAILABLE') {
                 setTargetPoint(pointRes.data);
                 setViewMode("booking");
@@ -71,7 +72,7 @@ export default function ReservationPage() {
     const fetchNearby = async () => {
         if (!userLocation) return; 
         try {
-            const res = await axios.get('http://localhost:9876/api/points');
+            const res = await axios.get(`${API_BASE_URL}/api/points`);
             const currentId = reservationData?.pointid || targetPoint?.pointid || id;
             let available = res.data.filter(p => (p.status || '').toUpperCase() === 'AVAILABLE' && String(p.pointid) !== String(currentId));
             available = available.map(p => ({
@@ -95,7 +96,7 @@ export default function ReservationPage() {
     if (!targetPoint) return;
     setLoadingAction(true);
     try {
-        await axios.post(`http://localhost:9876/api/reserve/${targetPoint.pointid}/${minutes}`);
+        await axios.post(`${API_BASE_URL}/api/reserve/${targetPoint.pointid}/${minutes}`);
         navigate('/reserve');
         window.location.reload(); 
     } catch (err) { setLoadingAction(false); setError("Booking failed"); }
@@ -161,7 +162,6 @@ export default function ReservationPage() {
                                     <span className="text-xs text-blue-400 bg-blue-900/30 border border-blue-500/30 px-2 py-0.5 rounded font-mono">{Math.round(point.distance)}m</span>
                                 </div>
                             </div>
-                            {/* SOS: Προστέθηκε το onPress ΕΔΩ */}
                             <Button size="sm" onPress={() => handleGoToMap(point.pointid)} className="bg-zinc-800 text-white font-bold border border-zinc-700 ml-2">Book</Button>
                         </CardBody>
                     </Card>

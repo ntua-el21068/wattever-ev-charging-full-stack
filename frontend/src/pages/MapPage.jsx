@@ -6,8 +6,8 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button, Input, Card, CardBody, Chip } from "@heroui/react";
+import API_BASE_URL from '../config';
 
-// --- ICONS ---
 const TargetIcon = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="10"></circle>
@@ -19,7 +19,6 @@ const TargetIcon = () => (
   </svg>
 );
 
-// --- CSS STYLES ---
 const mapStyles = `
   .led-marker { display: flex; align-items: center; justify-content: center; }
   .led-core { width: 22px; height: 22px; border-radius: 50%; background-color: currentColor; border: 2px solid white; box-shadow: 0 3px 8px rgba(0,0,0,0.5); }
@@ -37,7 +36,6 @@ const mapStyles = `
   .leaflet-popup-content { margin: 0 !important; } .leaflet-popup-close-button { display: none; }
 `;
 
-// --- HELPER FUNCTIONS ---
 const getDistanceFromLatLonInM = (lat1, lon1, lat2, lon2) => {
   if (!lat1 || !lon1 || !lat2 || !lon2) return Infinity;
   const R = 6371e3; 
@@ -47,7 +45,7 @@ const getDistanceFromLatLonInM = (lat1, lon1, lat2, lon2) => {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 };
 
-const getId = (p) => String(p.charger_id || p.pointid || "Unknown"); // SOS: Ensure String
+const getId = (p) => String(p.charger_id || p.pointid || "Unknown");
 const getChargerTitle = (p) => p.station_address || p.station_name || `Charger #${getId(p)}`;
 
 function SearchOverlay({ points, onSelectResult }) {
@@ -57,14 +55,21 @@ function SearchOverlay({ points, onSelectResult }) {
         if (!query) return [];
         return points.filter(p => (getChargerTitle(p) + getId(p)).toLowerCase().includes(query.toLowerCase())).slice(0, 5);
     }, [query, points]);
+
     return (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-[1000] w-[90%] max-w-md font-sans">
             <Card className="bg-zinc-900/95 border border-zinc-700 shadow-2xl backdrop-blur-md">
-                <CardBody className="p-2"><Input placeholder="Search stations..." isClearable onClear={() => setQuery("")} value={query} onValueChange={setQuery} onFocus={() => setShowResults(true)} classNames={{ inputWrapper: "bg-zinc-800", input: "text-white" }}/></CardBody>
+                <CardBody className="p-2">
+                    <Input placeholder="Search stations..." isClearable onClear={() => setQuery("")} value={query} onValueChange={setQuery} onFocus={() => setShowResults(true)} classNames={{ inputWrapper: "bg-zinc-800", input: "text-white" }}/>
+                </CardBody>
             </Card>
             {showResults && results.length > 0 && (
                 <Card className="mt-2 bg-zinc-900/95 border border-zinc-700 backdrop-blur-md">
-                    <div className="flex flex-col">{results.map((p) => (<button key={getId(p)} onClick={() => { onSelectResult(p); setShowResults(false); }} className="p-3 hover:bg-zinc-800 text-left text-white border-b border-zinc-800 text-sm">{getChargerTitle(p)}</button>))}</div>
+                    <div className="flex flex-col">
+                        {results.map((p) => (
+                            <button key={getId(p)} onClick={() => { onSelectResult(p); setShowResults(false); }} className="p-3 hover:bg-zinc-800 text-left text-white border-b border-zinc-800 text-sm">{getChargerTitle(p)}</button>
+                        ))}
+                    </div>
                 </Card>
             )}
         </div>
@@ -78,20 +83,10 @@ const SmartMarker = ({ point, selectedId, navigate, userLocation, activeReservat
     const isReservedByMe = String(activeReservationId) === myId;
     const canCharge = distance < 500 || isReservedByMe;
 
-    // SOS Fix: Πιο επιθετικό άνοιγμα popup
     useEffect(() => {
         if (selectedId === myId && markerRef.current) {
-            // Δοκιμάζουμε να ανοίξουμε το popup. 
-            // Αν το marker ήταν σε cluster, μπορεί να πάρει λίγα ms για να γίνει mount.
-            const tryOpen = () => {
-                if (markerRef.current) {
-                    markerRef.current.openPopup();
-                }
-            };
-            
-            // Προσπάθεια 1: Άμεσα
+            const tryOpen = () => { if (markerRef.current) markerRef.current.openPopup(); };
             tryOpen();
-            // Προσπάθεια 2: Μετά από 300ms (αν το cluster αργεί να σπάσει)
             const timer = setTimeout(tryOpen, 300);
             return () => clearTimeout(timer);
         }
@@ -135,34 +130,24 @@ export default function MapPage() {
   }, []);
 
   useEffect(() => {
-    const fetchPoints = async () => { try { const response = await axios.get('http://localhost:9876/api/points'); setPoints(response.data); } catch (error) { console.error(error); } };
+    const fetchPoints = async () => { try { const response = await axios.get(`${API_BASE_URL}/api/points`); setPoints(response.data); } catch (error) { console.error(error); } };
     fetchPoints();
-    const fetchReservation = async () => { try { const res = await axios.get('http://localhost:9876/api/user/active_reservation'); if (res.data && res.data.pointid) setActiveReservationId(String(res.data.pointid)); else setActiveReservationId(null); } catch(e) { console.error(e); } };
+    const fetchReservation = async () => { try { const res = await axios.get(`${API_BASE_URL}/api/user/active_reservation`); if (res.data && res.data.pointid) setActiveReservationId(String(res.data.pointid)); else setActiveReservationId(null); } catch(e) { console.error(e); } };
     fetchReservation();
   }, []);
 
-  // --- SOS: Η καρδιά της διόρθωσης ---
   useEffect(() => {
     if (location.state && location.state.targetId && points.length > 0) {
         const targetId = String(location.state.targetId);
         const point = points.find(p => getId(p) === targetId);
-        
         if (point && mapRef.current) {
-            // 1. Zoom στο σημείο
             mapRef.current.flyTo([parseFloat(point.lat), parseFloat(point.lon)], 18, { duration: 1.5 });
-            
-            // 2. Χρησιμοποιούμε το 'moveend' event για απόλυτη σιγουριά
-            // Σημαίνει: "Όταν τελειώσει ΟΛΗ η κίνηση, τότε ενεργοποίησε το Popup"
             const map = mapRef.current;
-            const onMoveEnd = () => {
-                setSelectedId(targetId);
-                map.off('moveend', onMoveEnd); // Καθαρίζουμε τον listener
-            };
-            
+            const onMoveEnd = () => { setSelectedId(targetId); map.off('moveend', onMoveEnd); };
             map.on('moveend', onMoveEnd);
         }
     }
-  }, [location, points]); // SOS: Εξαρτάται ΚΑΙ από τα points
+  }, [location, points]);
 
   useEffect(() => { if ("geolocation" in navigator) { navigator.geolocation.getCurrentPosition((position) => { setUserLocation({ lat: position.coords.latitude, lon: position.coords.longitude }); }); } }, []);
 
@@ -170,7 +155,6 @@ export default function MapPage() {
       const id = getId(point);
       if (mapRef.current) {
           mapRef.current.flyTo([parseFloat(point.lat), parseFloat(point.lon)], 18, { duration: 1.5 });
-          // Manual timeout για το search (εδώ δεν αλλάζει το URL, οπότε το κάνουμε έτσι)
           setTimeout(() => setSelectedId(id), 1600);
       }
   };

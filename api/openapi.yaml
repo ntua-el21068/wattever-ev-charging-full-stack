@@ -1,0 +1,449 @@
+openapi: 3.1.0
+info:
+  title: WATTever API
+  version: 0.1.0
+paths:
+  /api/admin/healthcheck:
+    get:
+      summary: Health Check
+      operationId: health_check_api_admin_healthcheck_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/admin/resetpoints:
+    post:
+      summary: Reset Points
+      operationId: reset_points_api_admin_resetpoints_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/admin/addpoints:
+    post:
+      summary: Add Points
+      operationId: add_points_api_admin_addpoints_post
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_add_points_api_admin_addpoints_post'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/points:
+    get:
+      summary: Get Points
+      operationId: get_points_api_points_get
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            title: Status
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            default: json
+            title: Format
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  '/api/point/{point_id}':
+    get:
+      summary: Get Point Details
+      operationId: get_point_details_api_point__point_id__get
+      parameters:
+        - name: point_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Point Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  '/api/reserve/{point_id}/{minutes}':
+    post:
+      summary: Reserve Point
+      operationId: reserve_point_api_reserve__point_id___minutes__post
+      parameters:
+        - name: point_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Point Id
+        - name: minutes
+          in: path
+          required: true
+          schema:
+            type: integer
+            title: Minutes
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  '/api/reserve/{point_id}':
+    post:
+      summary: Reserve Point
+      operationId: reserve_point_api_reserve__point_id__post
+      parameters:
+        - name: point_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Point Id
+        - name: minutes
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 30
+            title: Minutes
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  '/api/updpoint/{point_id}':
+    post:
+      summary: Update Point
+      operationId: update_point_api_updpoint__point_id__post
+      parameters:
+        - name: point_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Point Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePointInput'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/newsession:
+    post:
+      summary: New Session
+      operationId: new_session_api_newsession_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionInput'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  '/api/sessions/{point_id}/{date_from}/{date_to}':
+    get:
+      summary: Get Sessions
+      operationId: get_sessions_api_sessions__point_id___date_from___date_to__get
+      parameters:
+        - name: point_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Point Id
+        - name: date_from
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Date From
+        - name: date_to
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Date To
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            default: json
+            title: Format
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  '/api/pointstatus/{point_id}/{date_from}/{date_to}':
+    get:
+      summary: Get Point Status
+      operationId: get_point_status_api_pointstatus__point_id___date_from___date_to__get
+      parameters:
+        - name: point_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Point Id
+        - name: date_from
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Date From
+        - name: date_to
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Date To
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            default: json
+            title: Format
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  '/api/charge/start/{point_id}/{vehicle_id}':
+    post:
+      summary: Start Charging Process
+      operationId: start_charging_process_api_charge_start__point_id___vehicle_id__post
+      parameters:
+        - name: point_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Point Id
+        - name: vehicle_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Vehicle Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  '/api/charge/stop/{point_id}':
+    post:
+      summary: Stop Charging Process
+      operationId: stop_charging_process_api_charge_stop__point_id__post
+      parameters:
+        - name: point_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Point Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/user/active_reservation:
+    get:
+      summary: Get Active Reservation
+      operationId: get_active_reservation_api_user_active_reservation_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+components:
+  schemas:
+    Body_add_points_api_admin_addpoints_post:
+      properties:
+        file:
+          type: string
+          format: binary
+          title: File
+      type: object
+      required:
+        - file
+      title: Body_add_points_api_admin_addpoints_post
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    SessionInput:
+      properties:
+        id:
+          type: string
+          title: Id
+        starttime:
+          type: string
+          title: Starttime
+        endtime:
+          type: string
+          title: Endtime
+        startsoc:
+          type: integer
+          title: Startsoc
+        endsoc:
+          type: integer
+          title: Endsoc
+        totalkwh:
+          type: number
+          title: Totalkwh
+        kwhprice:
+          type: number
+          title: Kwhprice
+        amount:
+          type: number
+          title: Amount
+      type: object
+      required:
+        - id
+        - starttime
+        - endtime
+        - startsoc
+        - endsoc
+        - totalkwh
+        - kwhprice
+        - amount
+      title: SessionInput
+    UpdatePointInput:
+      properties:
+        status:
+          anyOf:
+            - type: string
+            - type: 'null'
+          title: Status
+        kwhprice:
+          anyOf:
+            - type: number
+            - type: 'null'
+          title: Kwhprice
+      type: object
+      title: UpdatePointInput
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+              - type: string
+              - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+      type: object
+      required:
+        - loc
+        - msg
+        - type
+      title: ValidationError

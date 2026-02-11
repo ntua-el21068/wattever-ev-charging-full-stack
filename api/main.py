@@ -1,15 +1,16 @@
 import io
+import os
 import csv
 import json
 import mysql.connector
 from datetime import datetime, timedelta
+from typing import Optional
 from fastapi import FastAPI, Request, Response, HTTPException, Form, File, UploadFile
 from fastapi.responses import JSONResponse
-from typing import Optional
-from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from backend.database import get_db_connection, DB_CONFIG
 
-# Προσπάθεια import του utils, αλλιώς ορίζουμε εδώ τη συνάρτηση για να μην κρασάρει
 try:
     from utils import create_error_log
 except ImportError:
@@ -26,7 +27,6 @@ except ImportError:
 app = FastAPI(title="WATTever API")
 
 origins = ["http://localhost:5173", "http://127.0.0.1:5173", "*"]
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -37,22 +37,25 @@ app.add_middleware(
 
 API_PREFIX = "/api"
 
-# --- ΡΥΘΜΙΣΕΙΣ ΒΑΣΗΣ ---
+import mysql.connector
+from fastapi import HTTPException
+
+# ΡΥΘΜΙΣΕΙΣ ΒΑΣΗΣ - Κεντρική διαχείριση υπηρεσιών δεδομένων
 DB_CONFIG = {
     'host': 'localhost',
     'user': 'softeng_user',
-    'password': 'softeng_pass',  
+    'password': 'softeng_pass',
     'database': 'wattever_db'
 }
 
 def get_db_connection():
+    """Υπηρεσία διασύνδεσης με τη βάση δεδομένων (Backend Service)"""
     try:
         conn = mysql.connector.connect(**DB_CONFIG)
         return conn
     except mysql.connector.Error as err:
         raise HTTPException(status_code=500, detail=f"Database connection failed: {err}")
 
-# --- PYDANTIC MODELS ---
 class UpdatePointInput(BaseModel):
     status: Optional[str] = None
     kwhprice: Optional[float] = None
@@ -67,14 +70,14 @@ class SessionInput(BaseModel):
     kwhprice: float
     amount: float
 
-# --- 1. /admin/healthcheck ---
 @app.get(f"{API_PREFIX}/admin/healthcheck")
 async def health_check(request: Request):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) FROM Charger")
     total = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM Charger WHERE status != 'offline' AND status != 'outoforder'")
+    # ΔΙΟΡΘΩΣΗ: Αλλαγή του outoforder σε malfunction
+    cursor.execute("SELECT COUNT(*) FROM Charger WHERE status != 'offline' AND status != 'malfunction'")
     online = cursor.fetchone()[0]
     conn.close()
     
@@ -86,15 +89,16 @@ async def health_check(request: Request):
         "n_charge_points_offline": total - online
     }
 
-# --- 2. /admin/resetpoints ---
-INITIAL_DATA_FILE = "parts1234.json"
+# ΔΙΟΡΘΩΣΗ: Path Correction
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+INITIAL_DATA_FILE = os.path.join(BACKEND_DIR, "..", "database", "parts1234.json")
+INITIAL_DATA_FILE = os.path.normpath(INITIAL_DATA_FILE)
 
 @app.post(f"{API_PREFIX}/admin/resetpoints")
 async def reset_points(request: Request):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        # Καθαρισμός με τη σωστή σειρά λόγω Foreign Keys
         cursor.execute("DELETE FROM StatusHistory") 
         cursor.execute("DELETE FROM Transaction")
         cursor.execute("DELETE FROM ChargingSession")
@@ -102,6 +106,9 @@ async def reset_points(request: Request):
         cursor.execute("DELETE FROM Charger")
         cursor.execute("DELETE FROM Station")
         
+        if not os.path.exists(INITIAL_DATA_FILE):
+             raise FileNotFoundError(f"File not found: {INITIAL_DATA_FILE}")
+
         with open(INITIAL_DATA_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
             
@@ -150,10 +157,8 @@ async def reset_points(request: Request):
     finally:
         conn.close()
 
-# --- 3. /admin/addpoints ---
 @app.post(f"{API_PREFIX}/admin/addpoints")
 async def add_points(request: Request, file: UploadFile = File(...)):
-    # Δεκτό και το excel type αν το στέλνει έτσι ο browser, αλλά πρέπει να είναι CSV
     content = await file.read()
     try:
         decoded = content.decode('utf-8')
@@ -171,7 +176,6 @@ async def add_points(request: Request, file: UploadFile = File(...)):
             cid = row.get('charger_id', '').strip()
             if not sid or not cid: continue
             
-            # Insert Station if missing
             cursor.execute("SELECT station_id FROM Station WHERE station_id = %s", (sid,))
             if not cursor.fetchone():
                 cursor.execute(
@@ -180,7 +184,6 @@ async def add_points(request: Request, file: UploadFile = File(...)):
                      float(row.get('latitude', 0)), float(row.get('longitude', 0)))
                 )
             
-            # Insert Charger
             cursor.execute("SELECT charger_id FROM Charger WHERE charger_id = %s", (cid,))
             if not cursor.fetchone():
                 conn_type = row.get('connector_type', 'Unknown')
@@ -202,13 +205,13 @@ async def add_points(request: Request, file: UploadFile = File(...)):
     
     return {"status": "OK", "chargers_added": count}
 
-# --- 4. /points (a) ---
 @app.get(f"{API_PREFIX}/points")
 async def get_points(request: Request, status: str = None, format: str = "json"):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     
-    if status and status.lower() not in ["available", "charging", "reserved", "outoforder", "offline"]:
+    # ΔΙΟΡΘΩΣΗ: Αλλαγή του outoforder σε malfunction
+    if status and status.lower() not in ["available", "charging", "reserved", "malfunction", "offline"]:
         conn.close()
         return JSONResponse(status_code=400, content=create_error_log(request, 400, "Invalid status argument"))
 
@@ -244,13 +247,11 @@ async def get_points(request: Request, status: str = None, format: str = "json")
         
     return data
 
-# --- 5. /point/{id} (b) ---
 @app.get(API_PREFIX + "/point/{point_id}")
 async def get_point_details(request: Request, point_id: str):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     
-    # Προσθήκη session info για το UI
     query = """
         SELECT 
             c.charger_id as pointid,
@@ -277,11 +278,9 @@ async def get_point_details(request: Request, point_id: str):
     if not point:
         return JSONResponse(status_code=404, content=create_error_log(request, 404, "Point not found"))
     
-    # *** CRITICAL FIX FOR SPEC: Return current time if NOT reserved ***
     if point["reservationendtime"]:
         point["reservationendtime"] = point["reservationendtime"].strftime("%Y-%m-%d %H:%M")
     else:
-        # Βάσει εκφώνησης: Αν δεν είναι δεσμευμένο, επιστρέφεται η τρέχουσα ημερομηνία/ώρα
         point["reservationendtime"] = datetime.now().strftime("%Y-%m-%d %H:%M")
         
     if point.get("current_session_start"):
@@ -292,7 +291,6 @@ async def get_point_details(request: Request, point_id: str):
 
     return point
 
-# --- 6. /reserve (c) ---
 @app.post(API_PREFIX + "/reserve/{point_id}")
 @app.post(API_PREFIX + "/reserve/{point_id}/{minutes}")
 async def reserve_point(request: Request, point_id: str, minutes: int = 30):
@@ -304,9 +302,11 @@ async def reserve_point(request: Request, point_id: str, minutes: int = 30):
     
     if not point or point["status"] != "AVAILABLE":
         conn.close()
-        # Εδώ η εκφώνηση λέει επιστροφή timestamp 1970 αν αποτύχει, αλλά συνήθως σε REST πετάμε 400
-        # Αν θέλεις αυστηρή τήρηση, θα μπορούσες να επιστρέψεις 200 με 1970, αλλά το 400 είναι πιο σωστό REST
-        return JSONResponse(status_code=400, content=create_error_log(request, 400, "Charger not available"))
+        return {
+            "pointid": point_id,
+            "status": "available",
+            "reservationendtime": "1970-01-01 00:00"
+        }
     
     actual_minutes = min(60, minutes)
     end_time = datetime.now() + timedelta(minutes=actual_minutes)
@@ -327,7 +327,6 @@ async def reserve_point(request: Request, point_id: str, minutes: int = 30):
         "reservationendtime": end_time.strftime("%Y-%m-%d %H:%M")
     }
 
-# --- 7. /updpoint (d) ---
 @app.post(API_PREFIX + "/updpoint/{point_id}")
 async def update_point(request: Request, point_id: str, input_data: UpdatePointInput):
     conn = get_db_connection()
@@ -342,7 +341,8 @@ async def update_point(request: Request, point_id: str, input_data: UpdatePointI
 
     new_status = current['status']
     if input_data.status:
-        if input_data.status.lower() not in ["available", "charging", "reserved", "outoforder", "offline"]:
+        # ΔΙΟΡΘΩΣΗ: Αλλαγή του outoforder σε malfunction
+        if input_data.status.lower() not in ["available", "charging", "reserved", "malfunction", "offline"]:
             conn.close()
             return JSONResponse(status_code=400, content=create_error_log(request, 400, "Invalid status"))
         new_status = input_data.status.upper()
@@ -354,7 +354,6 @@ async def update_point(request: Request, point_id: str, input_data: UpdatePointI
     if input_data.kwhprice is not None:
         req_price = float(input_data.kwhprice)
         if req_price != new_price:
-            # Create new policy logic (simplified)
             new_pol_id = f"POL_{req_price:.2f}".replace('.', '_')
             try:
                 cursor.execute("INSERT INTO PricingPolicy (policy_id, policy_type, name, fixed_price_kwh) VALUES (%s, 'Custom', %s, %s)", (new_pol_id, f"Price {req_price}", req_price))
@@ -366,7 +365,6 @@ async def update_point(request: Request, point_id: str, input_data: UpdatePointI
     conn.close()
     return {"pointid": point_id, "status": new_status.lower(), "kwhprice": new_price}
 
-# --- 8. /newsession (e) ---
 @app.post(API_PREFIX + "/newsession")
 async def new_session(request: Request, input_data: SessionInput):
     conn = get_db_connection()
@@ -391,9 +389,8 @@ async def new_session(request: Request, input_data: SessionInput):
         return JSONResponse(status_code=500, content=create_error_log(request, 500, str(e)))
 
     conn.close()
-    return {"status": "OK"} # Spec says empty body on success, or OK. Empty is usually null. This is fine.
+    return {}
 
-# --- 9. /sessions (f) ---
 @app.get(API_PREFIX + "/sessions/{point_id}/{date_from}/{date_to}")
 async def get_sessions(request: Request, point_id: str, date_from: str, date_to: str, format: str = "json"):
     conn = get_db_connection()
@@ -422,7 +419,6 @@ async def get_sessions(request: Request, point_id: str, date_from: str, date_to:
     results = cursor.fetchall()
     conn.close()
     
-    # *** CRITICAL FIX: Format HH:MM (No Seconds) as per spec ***
     for r in results:
         if isinstance(r['starttime'], datetime):
             r['starttime'] = r['starttime'].strftime("%Y-%m-%d %H:%M")
@@ -430,7 +426,6 @@ async def get_sessions(request: Request, point_id: str, date_from: str, date_to:
             r['endtime'] = r['endtime'].strftime("%Y-%m-%d %H:%M")
         elif r['endtime'] is None: r['endtime'] = ""
 
-    # *** CRITICAL FIX: Add CSV support ***
     if format == "csv":
         output = io.StringIO()
         if results:
@@ -441,7 +436,6 @@ async def get_sessions(request: Request, point_id: str, date_from: str, date_to:
 
     return results
 
-# --- 10. /pointstatus (g) ---
 @app.get(API_PREFIX + "/pointstatus/{point_id}/{date_from}/{date_to}")
 async def get_point_status(request: Request, point_id: str, date_from: str, date_to: str, format: str = "json"):
     conn = get_db_connection()
@@ -477,7 +471,6 @@ async def get_point_status(request: Request, point_id: str, date_from: str, date
 
     return results
 
-# --- HELPER ROUTES (For Frontend Logic) ---
 @app.post(API_PREFIX + "/charge/start/{point_id}/{vehicle_id}")
 async def start_charging_process(request: Request, point_id: str, vehicle_id: str):
     conn = get_db_connection()

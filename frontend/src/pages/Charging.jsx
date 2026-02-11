@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios"; 
 import { Card, CardBody, CardHeader, Button, CircularProgress, Chip, Divider, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure } from "@heroui/react";
+import API_BASE_URL from '../config';
 
 const DEMO_TOTAL_MS = 2 * 60 * 1000; 
 
@@ -59,7 +60,7 @@ export default function ChargingPage() {
     }
     const fetchData = async () => {
       try {
-        const res = await axios.get(`http://localhost:9876/api/point/${id}`);
+        const res = await axios.get(`${API_BASE_URL}/api/point/${id}`);
         setChargerData(res.data);
         const status = (res.data.status || '').toUpperCase();
         if (status === 'CHARGING') {
@@ -83,7 +84,7 @@ export default function ChargingPage() {
     const fetchNearby = async () => {
         if (!userLocation) return;
         try {
-            const res = await axios.get('http://localhost:9876/api/points');
+            const res = await axios.get(`${API_BASE_URL}/api/points`);
             const withDistance = res.data.map(p => ({
                 ...p,
                 distance: getDistanceFromLatLonInM(userLocation.lat, userLocation.lon, parseFloat(p.lat), parseFloat(p.lon))
@@ -120,7 +121,7 @@ export default function ChargingPage() {
   const handleStartCharging = async () => {
     setLoadingAction(true);
     try {
-        await axios.post(`http://localhost:9876/api/charge/start/${id}/VEH_001`);
+        await axios.post(`${API_BASE_URL}/api/charge/start/${id}/VEH_001`);
         localStorage.setItem(`session_start_${id}`, Date.now().toString());
         localStorage.setItem('active_session_point_id', id);
         setStats({ kwh: 0, cost: 0, timeSec: 0 });
@@ -132,7 +133,7 @@ export default function ChargingPage() {
   const handleStopSession = async () => {
       setLoadingAction(true);
       try {
-          const res = await axios.post(`http://localhost:9876/api/charge/stop/${id}`);
+          const res = await axios.post(`${API_BASE_URL}/api/charge/stop/${id}`);
           setStats({ kwh: res.data.kwh, cost: res.data.cost, timeSec: res.data.duration_min * 60 });
       } catch (err) { console.error(err); } 
       finally {
@@ -146,7 +147,7 @@ export default function ChargingPage() {
   const handleDisconnect = async () => {
       setLoadingAction(true);
       try {
-          const res = await axios.post(`http://localhost:9876/api/charge/stop/${id}`);
+          const res = await axios.post(`${API_BASE_URL}/api/charge/stop/${id}`);
           const overstayFee = overstaySec > 30 ? 2.50 : 0.00; 
           setStats({ kwh: res.data.kwh, cost: res.data.cost + overstayFee, timeSec: res.data.duration_min * 60, overstayFee: overstayFee });
           setView("summary");
@@ -269,7 +270,6 @@ export default function ChargingPage() {
                                     <span className="text-xs text-green-400 bg-green-900/30 border border-green-500/30 px-2 py-0.5 rounded font-mono">{Math.round(point.distance)}m</span>
                                 </div>
                             </div>
-                            {/* SOS: Προστέθηκε το onPress ΕΔΩ */}
                             <Button size="sm" onPress={() => handleGoToMap(point.pointid)} className="bg-green-600 text-black font-bold shadow-lg animate-pulse ml-2">CHARGE</Button>
                         </CardBody>
                     </Card>

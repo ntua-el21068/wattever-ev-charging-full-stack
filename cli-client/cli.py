@@ -131,7 +131,7 @@ def get_mock_point_for_update(point_id):
     return mock_points.get(str(point_id), {"status": "available", "kwhprice": 0.50})
 
 
-def get_mock_pointstatus(point_id, date_from, date_to, format_type='json'):
+def get_mock_pointstatus(point_id, date_from, date_to, format_type='csv'):
     
     mock_data = [
         {
@@ -192,7 +192,7 @@ def get_mock_reservation_failed(point_id, minutes=None):
     }
 
 
-def get_mock_sessions(point_id, date_from, date_to, format_type='json'):
+def get_mock_sessions(point_id, date_from, date_to, format_type='csv'):
     
     mock_data = [
         {
@@ -265,7 +265,7 @@ def healthcheck_command():
     
     try:
         print(" Προσπάθεια σύνδεσης με το API...")
-        response = requests.get("http://localhost:9876/api/admin/healthcheck", timeout=3)
+        response = requests.get("https://localhost:9876/api/admin/healthcheck", timeout=3, verify=False)
         
         if response.status_code == 200:
             data = response.json()
@@ -295,11 +295,11 @@ def healthcheck_command():
     
     # Εμφάνιση αποτελεσμάτων (είτε από API είτε από mock)
     print("\n ΑΠΟΤΕΛΕΣΜΑΤΑ:")
-    print(json.dumps(data, indent=2, ensure_ascii=False))
+    print(csv.dumps(data, indent=2, ensure_ascii=False))
     
     return data
 
-def points_command(status=None, format_type='json'):
+def points_command(status=None, format_type='csv'):
     
     print(f"📋 Λίστα φορτιστών" + (f" (status: {status})" if status else ""))
     
@@ -308,14 +308,14 @@ def points_command(status=None, format_type='json'):
         print(" Προσπάθεια σύνδεσης με το API...")
         
         # Κατασκευή URL με παραμέτρους
-        url = "http://localhost:9876/api/points"
+        url = "https://localhost:9876/api/points"
         params = {}
         if status:
             params['status'] = status
         if format_type:
             params['format'] = format_type
         
-        response = requests.get(url, params=params, timeout=3)
+        response = requests.get(url, params=params, timeout=3, verify=False)
         
         if response.status_code == 200:
             # Βρήκε το API
@@ -324,7 +324,7 @@ def points_command(status=None, format_type='json'):
             if format_type == 'csv':
                 return response.text  # CSV text
             else:
-                return response.json()  # JSON data
+                return response.json()  
                 
         else:
             # Το API υπάρχει αλλά έδωσε error
@@ -338,7 +338,7 @@ def points_command(status=None, format_type='json'):
         print("   Χρήση mock δεδομένων...")
         return get_mock_points(status)
         
-    except requests.exceptions.Timeout:
+    except requests.exceptions.Timeout: 
         print(" Timeout - API δεν απάντησε εγκαίρως")
         print(" Χρήση mock δεδομένων...")
         return get_mock_points(status)
@@ -358,9 +358,9 @@ def point_command(point_id):
         print("Προσπάθεια σύνδεσης με το API...")
         
         
-        url = f"http://localhost:9876/api/point/{point_id}"
+        url = f"https://localhost:9876/api/point/{point_id}"
         
-        response = requests.get(url, timeout=3)
+        response = requests.get(url, timeout=3, verify=False)
         
         if response.status_code == 200:
             # Βρήκε το API
@@ -410,7 +410,7 @@ def addpoints_command(csv_file_path):
         print("Προσπάθεια σύνδεσης με το API...")
         
         # Κατασκευή URL
-        url = "http://localhost:9876/api/admin/addpoints"
+        url = "https://localhost:9876/api/admin/addpoints"
         
         # Άνοιγμα και αποστολή του CSV αρχείου
         with open(csv_file_path, 'rb') as csv_file:
@@ -485,7 +485,7 @@ def updpoint_command(point_id, status=None, price=None):
         print(" Προσπάθεια σύνδεσης με το API...")
         
         # Κατασκευή URL
-        url = f"http://localhost:9876/api/updpoint/{point_id}"
+        url = f"https://localhost:9876/api/updpoint/{point_id}"
         
         # Αποστολή POST request με JSON body
         response = requests.post(url, json=update_data, timeout=5)
@@ -538,7 +538,7 @@ def resetpoints_command():
     
     try:
         print("Προσπάθεια σύνδεσης με API...")
-        response = requests.post("http://localhost:9876/api/admin/resetpoints", timeout=5)
+        response = requests.post("https://localhost:9876/api/admin/resetpoints", timeout=5)
         
         if response.status_code == 200:
             print("Επιτυχής επαναφορά!")
@@ -554,7 +554,7 @@ def resetpoints_command():
         print("API NOT READY - Mock response")
         return {
             "status": "success",
-            "message": "Mock: Database would be reset from default JSON file",
+            "message": "Mock: Database would be reset from default CSV file",
             "mock_note": "API not available"
         }
     except Exception as e:
@@ -562,14 +562,14 @@ def resetpoints_command():
         return {"error": str(e)}
     
 
-def pointstatus_command(point_id, date_from, date_to, format_type='json'):
+def pointstatus_command(point_id, date_from, date_to, format_type='csv'):
     
     print(f" Ιστορικό κατάστασης φορτιστή ID: {point_id}")
     print(f"   Από: {date_from} έως: {date_to}")
     
     try:
         print("Προσπάθεια σύνδεσης με API...")
-        url = f"http://localhost:9876/api/pointstatus/{point_id}/{date_from}/{date_to}"
+        url = f"https://localhost:9876/api/pointstatus/{point_id}/{date_from}/{date_to}"
         params = {}
         if format_type:
             params['format'] = format_type
@@ -609,9 +609,9 @@ def reserve_command(point_id, minutes=None):
         
         # Κατασκευή URL σύμφωνα με προδιαγραφές
         if minutes:
-            url = f"http://localhost:9876/api/reserve/{point_id}/{minutes}"
+            url = f"https://localhost:9876/api/reserve/{point_id}/{minutes}"
         else:
-            url = f"http://localhost:9876/api/reserve/{point_id}"
+            url = f"https://localhost:9876/api/reserve/{point_id}"
         
         response = requests.post(url, timeout=5)
         
@@ -640,7 +640,7 @@ def sessions_command(point_id, date_from, date_to, format_type='json'):
     
     try:
         print("Προσπάθεια σύνδεσης με API...")
-        url = f"http://localhost:9876/api/sessions/{point_id}/{date_from}/{date_to}"
+        url = f"https://localhost:9876/api/sessions/{point_id}/{date_from}/{date_to}"
         params = {}
         if format_type:
             params['format'] = format_type
@@ -693,7 +693,7 @@ def newsession_command(point_id, starttime, endtime, startsoc, endsoc,
         }
         
         # Αποστολή στο API
-        url = "http://localhost:9876/api/newsession"
+        url = "https://localhost:9876/api/newsession"
         response = requests.post(url, json=session_data, timeout=5)
         
         if response.status_code == 200:
@@ -730,8 +730,8 @@ def main():
 
     points_parser.add_argument('--format',
                           choices=['json', 'csv'],
-                          default='json',
-                          help='Μορφή εξόδου (default: json)')
+                          default='csv',
+                          help='Μορφή εξόδου (default: csv)')
     
     point_parser = subparsers.add_parser('point', 
                                         help='Πληροφορίες gia συγκεκριμένο φορτιστή')
@@ -741,8 +741,8 @@ def main():
                             help='ID του φορτιστή (required)')
     point_parser.add_argument('--format',
                             choices=['json', 'csv'],
-                            default='json',
-                            help='Μορφή εξόδου (default: json)')
+                            default='csv',
+                            help='Μορφή εξόδου (default: csv)')
     
         # 4. Addpoints command (προσθήκη φορτιστών από CSV)
     addpoints_parser = subparsers.add_parser('addpoints', 
@@ -781,7 +781,7 @@ def main():
     
         # 6. Resetpoints command
     resetpoints_parser = subparsers.add_parser('resetpoints', 
-                                             help='Επαναφορά δεδομένων από προκαθορισμένο JSON αρχείο')
+                                             help='Επαναφορά δεδομένων από προκαθορισμένο CSV αρχείο')
     
 
         # 7. Pointstatus command
@@ -792,7 +792,7 @@ def main():
                                   help='Αρχική ημερομηνία (YYYYMMDD)')
     pointstatus_parser.add_argument('--to', required=True, dest='date_to',
                                   help='Τελική ημερομηνία (YYYYMMDD)')
-    pointstatus_parser.add_argument('--format', choices=['json', 'csv'], default='json')
+    pointstatus_parser.add_argument('--format', choices=['json', 'csv'], default='CSV')
 
     reserve_parser = subparsers.add_parser('reserve', 
                                          help='Δέσμευση φορτιστή gia συγκεκριμένο χρόνο')
@@ -808,7 +808,7 @@ def main():
                                help='Αρχική ημερομηνία (YYYYMMDD)')
     sessions_parser.add_argument('--to', required=True, dest='date_to',
                                help='Τελική ημερομηνία (YYYYMMDD)')
-    sessions_parser.add_argument('--format', choices=['json', 'csv'], default='json')
+    sessions_parser.add_argument('--format', choices=['json', 'csv'], default='csv')
 
 
     newsession_parser = subparsers.add_parser('newsession', 

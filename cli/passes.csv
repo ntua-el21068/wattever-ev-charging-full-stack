@@ -1,0 +1,3 @@
+station_id,charger_id,name,address,latitude,longitude,connector_type,max_power_kw
+ST_DEMO_99,CH_DEMO_991,Test Station A,Athens,37.9,23.7,Type 2,22
+ST_DEMO_99,CH_DEMO_992,Test Station B,Athens,37.9,23.7,CCS,50

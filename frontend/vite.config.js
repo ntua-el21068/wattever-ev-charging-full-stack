@@ -8,8 +8,8 @@ export default defineConfig({
   server: {
     https: {
       // Χρησιμοποίησε τα ίδια πιστοποιητικά που έφτιαξες για το backend
-      key: fs.readFileSync(path.resolve(__dirname, '../backend/key.pem')),
-      cert: fs.readFileSync(path.resolve(__dirname, '../backend/cert.pem')),
+      key: fs.readFileSync(path.resolve(__dirname, '../api/key.pem')),
+      cert: fs.readFileSync(path.resolve(__dirname, '../api/cert.pem')),
     },
     port: 5173,
   },

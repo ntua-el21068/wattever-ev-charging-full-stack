@@ -44,7 +44,7 @@ def run_demo():
         os.system(cmd)
         print("-" * 50)
         
-    print("\n✅ Το σενάριο επίδειξης ολοκληρώθηκε!")
+    print("\n Το σενάριο επίδειξης ολοκληρώθηκε!")
 
 if __name__ == '__main__':
     run_demo()

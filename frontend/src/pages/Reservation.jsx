@@ -45,7 +45,7 @@ export default function ReservationPage() {
         const res = await axios.get(`${API_BASE_URL}/api/user/active_reservation`);
         if (res.data && res.data.reservation_id) {
             setReservationData(res.data);
-            const endTime = new Date(res.data.expiration_time).getTime();
+            const endTime = new Date(reservation.expiration_time + 'Z');
             const now = new Date().getTime();
             setTimeLeft(Math.floor((endTime - now) / 1000));
             setViewMode("active"); 

@@ -53,7 +53,7 @@ function App() {
             if (res.data && res.data.reservation_id) {
                 setReservationData(res.data);
                 // Calculate Time Left
-                const end = new Date(res.data.expiration_time).getTime();
+                const end = new Date(res.data.expiration_time + 'Z').getTime();
                 const now = Date.now();
                 const diff = Math.floor((end - now) / 1000);
                 setTimeLeft(diff > 0 ? diff : 0);

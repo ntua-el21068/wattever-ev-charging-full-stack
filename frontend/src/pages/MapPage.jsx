@@ -169,9 +169,9 @@ export default function MapPage() {
         <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
         <useMapEvents click={() => setSelectedId(null)} />
         <MarkerClusterGroup chunkedLoading zoomToBoundsOnClick={true} spiderfyOnMaxZoom={false} disableClusteringAtZoom={14} maxClusterRadius={45} iconCreateFunction={(cluster) => L.divIcon({ html: `<div class="custom-cluster-marker" style="width:40px;height:40px;">${cluster.getChildCount()}</div>` })}>
-            {points?.map((point) => (
-                <SmartMarker key={getId(point)} point={point} selectedId={selectedId} navigate={navigate} userLocation={userLocation} activeReservationId={activeReservationId} />
-            ))}
+            {Array.isArray(points) && points.map((point) => (
+    <SmartMarker key={getId(point)} point={point} selectedId={selectedId} navigate={navigate} userLocation={userLocation} activeReservationId={activeReservationId} />
+))}
         </MarkerClusterGroup>
         {userLocation && (<Marker position={[userLocation.lat, userLocation.lon]} icon={L.divIcon({ className: 'custom-div-icon', html: `<div class="user-pulse-marker"><div class="user-pulse-ring"></div><div class="user-dot"></div></div>`, iconSize: [40, 40] })} />)}
       </MapContainer>

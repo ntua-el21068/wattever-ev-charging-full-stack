@@ -45,12 +45,18 @@ export default function ReservationPage() {
         const res = await axios.get(`${API_BASE_URL}/api/user/active_reservation`);
         if (res.data && res.data.reservation_id) {
             setReservationData(res.data);
-            const endTime = new Date(reservation.expiration_time + 'Z');
+            // ΔΙΟΡΘΩΣΗ 1: Χρησιμοποιούμε res.data αντί για το ανύπαρκτο reservation
+            // ΔΙΟΡΘΩΣΗ 2: Προσθέτουμε το 'Z' για το timezone
+            const endTime = new Date(res.data.expiration_time + 'Z').getTime();
             const now = new Date().getTime();
-            setTimeLeft(Math.floor((endTime - now) / 1000));
+            const diffSeconds = Math.floor((endTime - now) / 1000);
+            
+            // ΔΙΟΡΘΩΣΗ 3: Αν έχει λήξει (αρνητικό), να δείχνει 0, όχι μείον
+            setTimeLeft(diffSeconds > 0 ? diffSeconds : 0);
             setViewMode("active"); 
             return; 
         }
+        
         if (id) {
             const pointRes = await axios.get(`${API_BASE_URL}/api/point/${id}`);
             if (pointRes.data.status === 'AVAILABLE') {

@@ -169,7 +169,7 @@ export default function MapPage() {
         <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
         <useMapEvents click={() => setSelectedId(null)} />
         <MarkerClusterGroup chunkedLoading zoomToBoundsOnClick={true} spiderfyOnMaxZoom={false} disableClusteringAtZoom={14} maxClusterRadius={45} iconCreateFunction={(cluster) => L.divIcon({ html: `<div class="custom-cluster-marker" style="width:40px;height:40px;">${cluster.getChildCount()}</div>` })}>
-            {points.map((point) => (
+            {points?.map((point) => (
                 <SmartMarker key={getId(point)} point={point} selectedId={selectedId} navigate={navigate} userLocation={userLocation} activeReservationId={activeReservationId} />
             ))}
         </MarkerClusterGroup>
